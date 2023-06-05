@@ -44,3 +44,14 @@ crash.log
 
 # Ignore local .env files used for environment variables
 .env*
+
+# python
+.idea
+.vscode
+.texpadtmp
+.DS_Store
+.ipynb_checkpoints
+__pycache__
+.ruff_cache
+.pytest_cache
+__pycache__
