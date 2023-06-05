@@ -26,7 +26,7 @@ co-simulation framework, and uses Apache Kafka for handling real-time data.
 
 Edge Component:
 
-- `data`: Based on the original data from ["Gem House Opendata: German Electricity Consumption in Many Households Over Three Years 2018-2020 (Fresh Energy)"](https://ieee-dataport.org/node/4576/).
+- `data`: Based on the original data from ["Gem House Opendata: German Electricity Consumption in Many Households Over Three Years 2018-2020 (Fresh Energy)"](https://ieee-dataport.org/node/4576/). The data is reduced to a one hour window and made compatible with the simulation environment by adding a title and converting the timestamp from `YYYY-MM-DD HH:mm:ss.SSS` to `YYYY-MM-DD HH:mm:ss`.
 
 - `household.py`: Contains the `Household` simulator that generates power data based on the provided CSV file.
 - `kafka_adapter.py`: Contains the `KafkaAdapter` and `KafkaAdapterModel` classes, responsible for connecting the Mosaik simulation with the Kafka data stream.
