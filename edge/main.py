@@ -29,6 +29,11 @@ sim_config = {
 
 
 def main() -> None:
+    """Main function to run the simulation with EdgeServer and Mosaik.
+
+    This function initializes the EdgeServer, creates the Mosaik world, runs the simulation
+    and finally stops the EdgeServer.
+    """
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
@@ -46,7 +51,12 @@ def main() -> None:
 
 
 def create_scenario(world: mosaik.World) -> None:
-    # read csvs
+    """Creates the simulation scenario in the given mosaik world.
+
+    Args:
+        world (mosaik.World): The mosaik world in which the scenario is to be created.
+    """
+    # Read household csvs
     household_data_dir = sim_args["household_data_dir"]
     if household_data_dir[-1] != "/":
         household_data_dir += "/"
@@ -63,15 +73,20 @@ def create_scenario(world: mosaik.World) -> None:
             household_name=household_name
         ).household())
 
+    # Create one kafka adapter for each household
     kafka_adapters = world.start("KafkaAdapter").KafkaAdapterModel.create(
                                                     num=len(csv_files),
                                                     kafka_address=sim_args["kafka_address"]
                                                 )
+    # and connect them respectively.
     mosaik.util.connect_randomly(world, households, kafka_adapters, "power")
 
+    # Print all collected data at the end for debugging
     monitor = world.start("Collector").Monitor()
     mosaik.util.connect_many_to_one(world, households, monitor, "power")
 
 
 if __name__ == '__main__':
+    """Entry point of the script, calls the main function."""
     main()
+

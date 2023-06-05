@@ -6,29 +6,34 @@ from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 
 class EdgeServer:
-    """The `EdgeServer` class is a server that interfaces with Apache Kafka to
+    """Server that processes streaming data, computes average power values for
+    nodes in a 30-second window, and publishes results.
+
+    The `EdgeServer` class is a server that interfaces with Apache Kafka to
     process streaming data. It consumes messages from a specified input Kafka
-    topic, performs computations on the data (specifically, computes the average
-    power value for each node within a 30-second window), and then publishes the
-    results to a specified output Kafka topic. The server operates using two
-    concurrent threads for consuming and producing data. It can be started with
-    the `run()` method and stopped safely with the `stop()` method."""
+    topic, performs computations on the data (specifically, computes the
+    average power value for each node within a 30-second window), and then
+    publishes the results to a specified output Kafka topic. The server
+    operates using two concurrent threads for consuming and producing data. It
+    can be started with the `run()` method and stopped safely with the `stop()`
+    method.
+
+    Args:
+        bootstrap_servers (str): The Kafka bootstrap servers.
+        input_topic (str): The input Kafka topic to consume messages from.
+        output_topic (str): The output Kafka topic to produce messages to.
+    """
 
     def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str) -> None:
-        """Initializes the Edge Server.
-
-        Args:
-            bootstrap_servers (str): The Kafka bootstrap servers.
-            input_topic (str): The input Kafka topic to consume messages from.
-            output_topic (str): The output Kafka topic to produce messages to.
-        """
         self.consumer = KafkaConsumer(
             input_topic,
             bootstrap_servers=bootstrap_servers,
             value_deserializer=lambda x: json.loads(x.decode('utf-8')))
+
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda x: json.dumps(x).encode('utf-8'))
+
         self.output_topic = output_topic
         self.lock = Lock()
         self.data: Dict[str, list] = defaultdict(list)
@@ -88,3 +93,4 @@ if __name__ == '__main__':
     output_topic = 'output_topic'
     edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic)
     edge_server.run()
+

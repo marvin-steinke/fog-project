@@ -14,9 +14,15 @@ META = {
     },
 }
 
-
 class KafkaAdapterModel():
-    def __init__(self, kafka_address: str) -> None:
+    """Defines a model for Kafka adapter which initializes a Kafka producer and
+    produces messages.
+
+    Args:
+        kafka_address (str): Address of the Kafka server. Defaults to "localhost:9092".
+    """
+
+    def __init__(self, kafka_address: str = "localhost:9092") -> None:
         self.lock = threading.Lock()
         self.p = None
 
@@ -27,7 +33,14 @@ class KafkaAdapterModel():
         thread.start()
 
     def step(self, household, power) -> None:
+        """Produce a message to a Kafka topic.
+
+        Args:
+            household (str): Name of the household.
+            power (float): Power data of the household.
+        """
         def produce_message():
+            """Produce a message to a Kafka topic."""
             # Extract the id from the household
             household_id = household.split(".")[1]
             data = {"node_id": household_id, "power_value": float(power)}
@@ -42,13 +55,26 @@ class KafkaAdapterModel():
 
 
 class KafkaAdapter(mosaik_api.Simulator):
+    """Mosaik Simulator class for Kafka Adapter which manages the creation and
+    stepping of KafkaAdapterModel instances.
+
+    It also manages getting data from the models and stepping the simulation.
+    """
     def __init__(self) -> None:
         super().__init__(META)
         self.eid_prefix = "KafkaAdapter_"
         self.entities = {}
 
     def init(self, sid: int, time_resolution: int):
-        """Initialize Simulator."""
+        """Mosaik: Initialize the Kafka Adapter with the given time resolution.
+
+        Args:
+            sid (int): Simulation ID.
+            time_resolution (int): Time resolution of the simulation.
+
+        Returns:
+            dict: Metadata about the Kafka Adapter.
+        """
         if float(time_resolution) != 1.0:
             raise ValueError(
                 f"{self.__class__.__name__} only supports time_resolution=1., "
@@ -57,7 +83,16 @@ class KafkaAdapter(mosaik_api.Simulator):
         return self.meta
 
     def create(self, num: int, model: str, kafka_address: str = "localhost:9092"):
-        """Create `model_instance` and save it in `entities`."""
+        """Mosaik: Create entities of the given model.
+
+        Args:
+            num (int): Number of entities to be created.
+            model (str): The model name.
+            kafka_address (str, optional): Address of the Kafka server. Defaults to "localhost:9092".
+
+        Returns:
+            list: A list of dictionaries representing the created entities.
+        """
         next_eid = len(self.entities)
         entities = []
         for i in range(next_eid, next_eid + num):
@@ -68,7 +103,16 @@ class KafkaAdapter(mosaik_api.Simulator):
         return entities
 
     def step(self, time: int, inputs: dict, max_advance: int):
-        """Set all `inputs` attr values to the `entity` attrs, then step the `entity`."""
+        """Mosaik: Step the simulation for all the entities in this adapter.
+
+        Args:
+            time (int): Current time of the simulation.
+            inputs (dict): Input data for this step.
+            max_advance (int): Maximum time that the simulator can advance in one step.
+
+        Returns:
+            None
+        """
         self.time = time
         for eid, attrs in inputs.items():
             entity = self.entities[eid]
@@ -82,7 +126,14 @@ class KafkaAdapter(mosaik_api.Simulator):
         return None
 
     def get_data(self, outputs: dict):
-        """Return all requested data as attr from the `model_instance`."""
+        """Mosaik: Get output data for the given entity and attributes.
+
+        Args:
+            outputs (dict): A dictionary of entity ids and their requested attributes.
+
+        Returns:
+            dict: The data for the requested entities and attributes.
+        """
         data = {}
         for eid, attrs in outputs.items():
             model = self.entities[eid]
@@ -93,3 +144,4 @@ class KafkaAdapter(mosaik_api.Simulator):
                     raise ValueError(f"Unknown output attribute: {attr}")
                 data[eid][attr] = getattr(model, attr)
         return data
+
