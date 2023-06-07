@@ -1,6 +1,7 @@
 import mosaik
 import mosaik.util
 from edge_server import EdgeServer
+from local_db.db_handler import dbHandler
 import time
 import configparser
 import os
@@ -31,14 +32,19 @@ sim_config = {
 def main() -> None:
     """Main function to run the simulation with EdgeServer and Mosaik.
 
-    This function initializes the EdgeServer, creates the Mosaik world, runs the simulation
+    This function initializes the EdgeServer with its the local database, creates the Mosaik world, runs the simulation
     and finally stops the EdgeServer.
     """
+    
+    db_handler = dbHandler('local_db/test.db')
+    
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
-            output_topic="avg_power_topic"
+            output_topic="avg_power_topic",
+            db_handler=db_handler
     )
+    
     edge_server.run()
     while not edge_server.ready:
         time.sleep(.1)
