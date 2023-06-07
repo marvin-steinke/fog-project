@@ -21,6 +21,11 @@ services:
     networks:
       - kafka_network
 
+  fog_app:
+    image: fog_app
+    volumes:
+      - /local_db:/test_db
+
 networks:
   kafka_network:
     driver: bridge
