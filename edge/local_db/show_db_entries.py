@@ -1,11 +1,9 @@
-# Description: Check the existence and display the schema of the SQLite database file.
-
 import sqlite3
 import os
 from sqlite3 import Error
 
 def check_database(local_db_file):
-    """Check the existence and display the schema of the SQLite database file.
+    """Check the existence and display the schema and some rows of the SQLite database file.
     
     Args:
         local_db_file (str): Path to the local SQLite database file.
@@ -25,6 +23,14 @@ def check_database(local_db_file):
             schema_rows = cursor.fetchall()
             for row in schema_rows:
                 print(row)
+            
+            # Select and display some rows from the power_averages table
+            print("\nData in power_averages table:")
+            cursor.execute("SELECT * FROM power_averages")
+            data_rows = cursor.fetchall()
+            for row in data_rows:
+                print(row)
+        
         else:
             print("Database does not exist or does not contain the expected table.")
         

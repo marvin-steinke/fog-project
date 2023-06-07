@@ -1,11 +1,10 @@
 import mosaik
 import mosaik.util
 from edge_server import EdgeServer
-from local_db.db_handler import dbHandler
+from local_db.db_operations import dbHandler
 import time
 import configparser
 import os
-
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -36,13 +35,13 @@ def main() -> None:
     and finally stops the EdgeServer.
     """
     
-    db_handler = dbHandler('local_db/test.db')
+    db_handler = dbHandler('test.db')
     
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
             output_topic="avg_power_topic",
-            db_handler=db_handler
+            db_handler=db_handler # Pass the db_handler to the EdgeServer
     )
     
     edge_server.run()

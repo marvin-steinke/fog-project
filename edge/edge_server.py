@@ -4,7 +4,7 @@ from threading import Lock, Thread
 from typing import Dict
 from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
-from local_db.db_handler import dbHandler
+from local_db.db_operations import dbHandler
 
 class EdgeServer:
     """Server that processes streaming data, computes average power values for
@@ -25,7 +25,7 @@ class EdgeServer:
         output_topic (str): The output Kafka topic to produce messages to.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler:dbHandler) -> None:
         self.consumer = KafkaConsumer(
             input_topic,
             bootstrap_servers=bootstrap_servers,
@@ -41,7 +41,8 @@ class EdgeServer:
         self.ready = False
         self.shutdown = False
         
-        self.db_handler = dbHandler('test.db')
+        # Use the db_handler argument to initialize the db_handler attribute
+        self.db_handler = db_handler
 
     def _consumer_thread(self) -> None:
         """Consumes messages from the input Kafka topic and stores the values
@@ -88,7 +89,6 @@ class EdgeServer:
         self.producer_thread.join()
         self.consumer.close()
         self.producer.close()
-        self.db_handler.conn.close()
         self.ready = False
 
 
@@ -96,6 +96,7 @@ if __name__ == '__main__':
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'
     output_topic = 'output_topic'
-    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic)
+    db_handler = dbHandler('test.db')
+    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler)
     edge_server.run()
 
