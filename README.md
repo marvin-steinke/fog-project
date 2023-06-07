@@ -52,6 +52,21 @@ Edge Component:
 
 ## Dependencies
 
+If prefered use a virtualenv to install the necessary dependencies to run the edge node.
+
+    ```
+    python3 -m venv myvenv
+
+    myvenv/bin/activate
+    ```
+
+    To deactivate run 
+
+    ```
+    deactivate
+    ```
+    in the directory where the venv is active
+
 - Python 3.8 or later
 - Mosaik
 - Apache Kafka
