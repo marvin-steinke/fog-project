@@ -4,6 +4,7 @@ from threading import Lock, Thread
 from typing import Dict
 from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
+from local_db.db_handler import dbHandler
 
 class EdgeServer:
     """Server that processes streaming data, computes average power values for
@@ -39,6 +40,8 @@ class EdgeServer:
         self.data: Dict[str, list] = defaultdict(list)
         self.ready = False
         self.shutdown = False
+        
+        self.db_handler = dbHandler('test.db')
 
     def _consumer_thread(self) -> None:
         """Consumes messages from the input Kafka topic and stores the values
@@ -65,6 +68,7 @@ class EdgeServer:
                         average = sum(values) / len(values)
                         print(average)
                         self.producer.send(self.output_topic, {"node_id": node_id, "average_power": average})
+                        self.db_handler.insert_power_average(node_id, average)
                         values.clear()
 
     def run(self) -> None:
@@ -84,6 +88,7 @@ class EdgeServer:
         self.producer_thread.join()
         self.consumer.close()
         self.producer.close()
+        self.db_handler.conn.close()
         self.ready = False
 
 
