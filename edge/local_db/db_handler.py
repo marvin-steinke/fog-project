@@ -1,17 +1,21 @@
 import sqlite3
-from sqllite3 import Error
+import os
+from sqlite3 import Error
 
 class dbHandler:
     """This is a class for handling db-operations using SQLLite3."""
-    def __init__(self, db_file):
+    def __init__(self, local_db_file):
         """Init the db connection
 
         Args:
-            db_file (_type_): _description_
+            local_db_file (str): takes path to local db file
         """
+        self.db_file = local_db_file
         self.conn = None
         try:
-            self.conn = sqlite3.connect(db_file)
+            if not os.path.exists(self.db_file):
+                self.create_schema
+            self.conn = sqlite3.connect(local_db_file)
         except Error as e:
             print(e)
             
@@ -49,3 +53,5 @@ class dbHandler:
             self.conn.commit()
         except Error as e:
             print(e)
+            
+test_db_handler = dbHandler('test.db')
