@@ -10,6 +10,8 @@ import sys
 import zmq
 import itertools
 
+# TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
+
 # Set variables for messaging actions of the edge node
 # Inspired by the Lazy Pirate server from the ZMQ guide
 
@@ -33,9 +35,11 @@ class EdgeServer:
         bootstrap_servers (str): The Kafka bootstrap servers.
         input_topic (str): The input Kafka topic to consume messages from.
         output_topic (str): The output Kafka topic to produce messages to.
+        db_handler (dbHandler): The dbHandler object to handle db operations.
+        cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler:dbHandler) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler:dbHandler, cloud_node_address) -> None:
         self.consumer = KafkaConsumer(
             input_topic,
             bootstrap_servers=bootstrap_servers,
@@ -53,6 +57,14 @@ class EdgeServer:
         
         # Use the db_handler argument to initialize the db_handler attribute
         self.db_handler = db_handler
+        
+        # Setup ZeroMQ client connection:
+        # cloud_node_address: specify the address of the cloud node for ZeroMQ to connect.
+        # context: Create a new ZeroMQ context which is thread safe and responsible for handling ZeroMQ connections.
+        # client: Create a ZeroMQ request socket (REQ) within the given context. This socket is used to send requests to the cloud node.
+        self.cloud_node_address = cloud_node_address
+        self.context = zmq.Context()
+        self.client = self.context.socket(zmq.REQ)
 
     def _consumer_thread(self) -> None:
         """Consumes messages from the input Kafka topic and stores the values
@@ -140,11 +152,11 @@ class EdgeServer:
         
             logging.info("Reconnecting to cloud node")
         
-        # Create new connection to the cloud node
-        self.client = self.context.socket(zmq.REQ)
-        self.client.connect(self.clode_node_address)
-        logging.info("Resending request %s", request)
-        self.client.send(request)
+            # Create new connection to the cloud node
+            self.client = self.context.socket(zmq.REQ)
+            self.client.connect(self.clode_node_address)
+            logging.info("Resending request %s", request)
+            self.client.send(request)
         
     def recover_unsent_data(self):
         # Fetch data in db that is flagged with 'sent' = 0
@@ -198,6 +210,6 @@ if __name__ == '__main__':
     input_topic = 'input_topic'
     output_topic = 'output_topic'
     db_handler = dbHandler('test.db')
-    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler)
+    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address) # Need to instantiate the variable within edge_server.py
     edge_server.run()
 

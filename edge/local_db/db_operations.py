@@ -2,6 +2,8 @@ import sqlite3
 import os
 from sqlite3 import Error
 
+# TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
+
 class dbHandler:
     """This is a class for handling db-operations using SQLite3."""
     def __init__(self, local_db_file):

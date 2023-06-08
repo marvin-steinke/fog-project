@@ -6,6 +6,8 @@ import time
 import configparser
 import os
 
+# TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
+
 config = configparser.ConfigParser()
 config.read('config.ini')
 sim_args = {
