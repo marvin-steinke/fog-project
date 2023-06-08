@@ -5,6 +5,10 @@ from typing import Dict
 from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 from local_db.db_operations import dbHandler
+import logging
+import sys
+import zmq
+import itertools
 
 class EdgeServer:
     """Server that processes streaming data, computes average power values for
@@ -68,9 +72,28 @@ class EdgeServer:
                     if values:
                         average = sum(values) / len(values)
                         print(average)
+                        
+                        # Initial step for real-time data stream: Sending the calculated average power value to the output topic.
                         self.producer.send(self.output_topic, {"node_id": node_id, "average_power": average})
-                        self.db_handler.insert_power_average(node_id, average)
+                        
+                        # Step 1: Writing the calculated average power value into the local database.
+                        # Note: This operation is designed to ensure data persistence in case of connectivity issues.
+                        id = self.db_handler.insert_power_average(node_id, average)
+                        
+                        # Step 2: Attempting to send the data to the cloud node.
+                        # In the case of successful transmission, the 'sent' flag in the local database 
+                        # is updated to 1 (indicating successful transmission).
+                        # In case of failure, the 'sent' flag remains 0, enabling us to identify and 
+                        # re-attempt transmission of unsent data when the connection is restored.
+                        sent = self.send_to_cloud_node({"node_id": node_id, "average_power": average})
+                        
+                        # Updating the 'sent' flag in the database based on whether the data was successfully sent or not
+                        if sent:
+                            self.db_handler.update_power_average(id)
+                        
                         values.clear()
+    
+    def send_to_cloud_node(self, data):
 
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
