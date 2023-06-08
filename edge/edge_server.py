@@ -10,6 +10,12 @@ import sys
 import zmq
 import itertools
 
+# Set variables for messaging actions of the edge node
+# Inspired by the Lazy Pirate server from the ZMQ guide
+
+REQUEST_TIMEOUT = 2500
+REQUEST_RETRIES = 3 # might need to be handled dynamically
+
 class EdgeServer:
     """Server that processes streaming data, computes average power values for
     nodes in a 30-second window, and publishes results.
@@ -58,6 +64,12 @@ class EdgeServer:
                 power_value = message[0].value['power_value']
                 with self.lock:
                     self.data[node_id].append(power_value)
+                    
+    """
+    The following functions extend kafka's producer thread by enabling reliable messaging. This is achieved by the usage of a local db
+    and a reliable messaing protocol towards the destiantion node (cloud node).
+
+    """
 
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
@@ -94,7 +106,71 @@ class EdgeServer:
                         values.clear()
     
     def send_to_cloud_node(self, data):
+        """Sends data from the producer thread to the cloud node.
 
+        Args:
+            data (_type_): dict values for node_id and average_power
+        """
+        self.client.connect(self.clode_node_address) # needs to be specified in config.ini
+        
+        request = json.dumps(data).encode('utf-8')
+        logging.info("Sending request %s", request)
+        self.client.send(request)
+        
+        remaining_retries = REQUEST_RETRIES
+        while True:
+            if (self.client.poll(REQUEST_TIMEOUT) & zmq.POLLIN) != 0:
+                reply = self.client.recv()
+                if reply == b' ACK':
+                    logging.info("Cloud node received request")
+                    remaining_retries = REQUEST_RETRIES
+                    break
+                else:
+                    logging.error("Server reply negative: %s", reply)
+                    
+            remaining_retries -= 1
+            logging.warning("Cloud node seems to be offline, retrying request")
+        
+            # Close and remove the socket before trying connection establishment again
+            self.client.setsockopt(zmq.LINGER, 0)
+            self.client.close()
+            if remaining_retries == 0:
+                logging.error("FATAL: Cloud node seems to be offline, abandoning")
+            break
+        
+            logging.info("Reconnecting to cloud node")
+        
+        # Create new connection to the cloud node
+        self.client = self.context.socket(zmq.REQ)
+        self.client.connect(self.clode_node_address)
+        logging.info("Resending request %s", request)
+        self.client.send(request)
+        
+    def recover_unsent_data(self):
+        # Fetch data in db that is flagged with 'sent' = 0
+        unsent_data = self.db_handler.get_unsent_power_averages
+        
+        # Try to send unsent data to the cloud node
+        for id, node_id, average, sent, timestamp in unsent_data:
+            sent = self.send_to_cloud_node({"node_id": node_id, "average_power": average})
+            # Update the database if sent successfully
+            if sent:
+                self.db_handler.update_power_average(id)
+                
+    def _recovery_thread(self) -> None:
+        """Periodically checks for unsent data and tries to resend it to the clode node."""
+        while not self.shutdown:
+            self.recover_unsent_data()
+            # Sleep for 30 seconds between attempts
+            for _ in range(30):
+                if self.shutdown:
+                    return
+                time.sleep(1)
+                
+    """
+    Failover handling implementation is done.
+    """
+    
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
         attribute to True."""
@@ -102,6 +178,7 @@ class EdgeServer:
         self.producer_thread = Thread(target=self._producer_thread)
         self.consumer_thread.start()
         self.producer_thread.start()
+        self._recovery_thread.start()
         self.ready = True
 
     def stop(self) -> None:
@@ -110,6 +187,7 @@ class EdgeServer:
         self.shutdown = True
         self.consumer_thread.join()
         self.producer_thread.join()
+        self._recovery_thread.join()
         self.consumer.close()
         self.producer.close()
         self.ready = False
