@@ -34,6 +34,7 @@ class dbHandler:
                 ''')
         except Error as e:
             print(e)
+            
     
     def insert_power_average(self, node_id, average):
         """Add a new average to the created schema
@@ -52,5 +53,31 @@ class dbHandler:
         except Error as e:
             print(e)
             
+    def update_power_average(self, node_id, average):
+        """Update db table when data is sent successfully"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                    UPDATE power_averages
+                    SET sent = 1
+                    WHERE id = ?;
+                ''', (id,))
+            self.conn.commit()
+        except Error as e:
+            print(e)
+            
+    def get_unsent_power_averages(self):
+        """Fetch rows that have not been sent."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                    SELECT * FROM power_averages
+                    WHERE sent = 0;
+                ''')
+            return cursor.fetchall()
+        except Error as e:
+            print(e)
+            return []
+                    
 test_database = dbHandler('test.db')
 
