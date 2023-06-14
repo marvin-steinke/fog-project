@@ -1,5 +1,7 @@
 # fog-project
 
+![schema](./documents/schema/schema.png)
+
 This project simulates a distributed power system where power data from
 different households is streamed in real-time. The data is processed and
 averaged over a 30-second window. The simulation is coordinated by Mosaik, a
