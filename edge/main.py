@@ -38,7 +38,10 @@ def main() -> None:
     and finally stops the EdgeServer.
     """
     
-    db_handler = dbHandler('test.db')
+    edge_node_dir = os.path.dirname(os.path.abspath(__file__))
+    db_file_path = os.path.join(edge_node_dir, 'local.db')
+    db_handler = dbHandler(db_file_path)
+    db_handler.create_schema()
     
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
