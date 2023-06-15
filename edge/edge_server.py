@@ -10,8 +10,9 @@ import sys
 import zmq
 import itertools
 import configparser
+import os
 
-# Insert config parser 
+# Insert config parser
 config = configparser.ConfigParser()
 
 # Read the config.ini file
@@ -26,7 +27,7 @@ cloud_node_address = config.get("Server", "cloud_node_address")
 # Inspired by the Lazy Pirate server from the ZMQ guide
 
 REQUEST_TIMEOUT = 2500
-REQUEST_RETRIES = 3 # might need to be handled dynamically
+REQUEST_RETRIES = 3  # might need to be handled dynamically
 
 class EdgeServer:
     """Server that processes streaming data, computes average power values for
@@ -49,7 +50,11 @@ class EdgeServer:
         cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler:dbHandler, cloud_node_address) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address) -> None:
+
+        db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
+        self.db_handler = dbHandler(db_file)
+
         self.consumer = KafkaConsumer(
             input_topic,
             bootstrap_servers=bootstrap_servers,
@@ -64,10 +69,10 @@ class EdgeServer:
         self.data: Dict[str, list] = defaultdict(list)
         self.ready = False
         self.shutdown = False
-        
+
         # Use the db_handler argument to initialize the db_handler attribute
         self.db_handler = db_handler
-        
+
         # Setup ZeroMQ client connection:
         # cloud_node_address: specify the address of the cloud node for ZeroMQ to connect.
         # context: Create a new ZeroMQ context which is thread safe and responsible for handling ZeroMQ connections.
@@ -75,6 +80,7 @@ class EdgeServer:
         self.cloud_node_address = cloud_node_address
         self.context = zmq.Context()
         self.client = self.context.socket(zmq.REQ)
+        self.client.connect(self.cloud_node_address)
 
     def _consumer_thread(self) -> None:
         """Consumes messages from the input Kafka topic and stores the values
@@ -86,18 +92,12 @@ class EdgeServer:
                 power_value = message[0].value['power_value']
                 with self.lock:
                     self.data[node_id].append(power_value)
-                    
-    """
-    The following functions extend kafka's producer thread by enabling reliable messaging. This is achieved by the usage of a local db
-    and a reliable messaing protocol towards the destiantion node (cloud node).
-
-    """
 
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic."""
         while not self.shutdown:
-            for _ in range(30):
+            for _ in range(10):
                 if self.shutdown:
                     return
                 time.sleep(1)
@@ -106,94 +106,66 @@ class EdgeServer:
                     if values:
                         average = sum(values) / len(values)
                         print(average)
-                        
+
                         # Initial step for real-time data stream: Sending the calculated average power value to the output topic.
-                        self.producer.send(self.output_topic, {"node_id": node_id, "average_power": average})
-                        
+                        # self.producer.send(self.output_topic, {"node_id": node_id, "average_power": average})
+
                         # Step 1: Writing the calculated average power value into the local database.
                         # Note: This operation is designed to ensure data persistence in case of connectivity issues.
                         id = self.db_handler.insert_power_average(node_id, average)
-                        
+
                         # Step 2: Attempting to send the data to the cloud node.
-                        # In the case of successful transmission, the 'sent' flag in the local database 
+                        # In the case of successful transmission, the 'sent' flag in the local database
                         # is updated to 1 (indicating successful transmission).
-                        # In case of failure, the 'sent' flag remains 0, enabling us to identify and 
+                        # In case of failure, the 'sent' flag remains 0, enabling us to identify and
                         # re-attempt transmission of unsent data when the connection is restored.
                         sent = self.send_to_cloud_node({"node_id": node_id, "average_power": average})
-                        
+
                         # Updating the 'sent' flag in the database based on whether the data was successfully sent or not
                         if sent:
                             self.db_handler.update_power_average(id)
-                        
+
                         values.clear()
-    
+
     def send_to_cloud_node(self, data):
-        """Sends data from the producer thread to the cloud node.
+        """Sends data from the producer thread to the cloud node and waits for the acknowledgment.
 
         Args:
             data (_type_): dict values for node_id and average_power
         """
-        self.client.connect(self.cloud_node_address) # needs to be specified in config.ini
-        
         request = json.dumps(data).encode('utf-8')
         logging.info("Sending request %s", request)
         self.client.send(request)
-        
+
         remaining_retries = REQUEST_RETRIES
         while True:
-            if (self.client.poll(REQUEST_TIMEOUT) & zmq.POLLIN) != 0:
+            if self.client.poll(REQUEST_TIMEOUT) & zmq.POLLIN:
                 reply = self.client.recv()
-                if reply == b' ACK':
+                if reply == b'ACK':
                     logging.info("Cloud node received request")
                     remaining_retries = REQUEST_RETRIES
                     break
                 else:
                     logging.error("Server reply negative: %s", reply)
-                    
-            remaining_retries -= 1
-            logging.warning("Cloud node seems to be offline, retrying request")
-        
-            # Close and remove the socket before trying connection establishment again
-            self.client.setsockopt(zmq.LINGER, 0)
-            self.client.close()
-            if remaining_retries == 0:
-                logging.error("FATAL: Cloud node seems to be offline, abandoning")
-            break
-        
-            logging.info("Reconnecting to cloud node")
-        
-            # Create new connection to the cloud node
-            self.client = self.context.socket(zmq.REQ)
-            self.client.connect(self.clode_node_address)
-            logging.info("Resending request %s", request)
-            self.client.send(request)
-        
-    def recover_unsent_data(self):
-        # Fetch data in db that is flagged with 'sent' = 0
-        unsent_data = self.db_handler.get_unsent_power_averages
-        
-        # Try to send unsent data to the cloud node
-        for id, node_id, average, sent, timestamp in unsent_data:
-            sent = self.send_to_cloud_node({"node_id": node_id, "average_power": average})
-            # Update the database if sent successfully
-            if sent:
-                self.db_handler.update_power_average(id)
-    '''           
-    def _recovery_thread(self) -> None:
-        """Periodically checks for unsent data and tries to resend it to the clode node."""
-        while not self.shutdown:
-            self.recover_unsent_data()
-            # Sleep for 30 seconds between attempts
-            for _ in range(30):
-                if self.shutdown:
-                    return
-                time.sleep(1)
-    '''
-                
-    """
-    Failover handling implementation is done.
-    """
-    
+            else:
+                remaining_retries -= 1
+                if remaining_retries == 0:
+                    logging.warning("Cloud node seems to be offline, retrying request")
+                    return False
+
+                logging.info("Cloud node seems to be offline, retrying request")
+
+                # Close and remove the socket before trying connection establishment again
+                self.client.setsockopt(zmq.LINGER, 0)
+                self.client.close()
+                logging.info("Reconnecting to cloud node")
+                self.client = self.context.socket(zmq.REQ)
+                self.client.connect(self.cloud_node_address)
+                logging.info("Resending request %s", request)
+                self.client.send(request)
+
+        return True
+
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
         attribute to True."""
@@ -201,7 +173,6 @@ class EdgeServer:
         self.producer_thread = Thread(target=self._producer_thread)
         self.consumer_thread.start()
         self.producer_thread.start()
-        #self._recovery_thread.start()
         self.ready = True
 
     def stop(self) -> None:
@@ -210,7 +181,6 @@ class EdgeServer:
         self.shutdown = True
         self.consumer_thread.join()
         self.producer_thread.join()
-        #self._recovery_thread.join()
         self.consumer.close()
         self.producer.close()
         self.ready = False
@@ -220,7 +190,6 @@ if __name__ == '__main__':
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'
     output_topic = 'output_topic'
-    db_handler = dbHandler('test.db')
-    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address) # Need to instantiate the variable within edge_server.py
+    db_handler = dbHandler('local.db')
+    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address)
     edge_server.run()
-

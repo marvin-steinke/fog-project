@@ -41,7 +41,7 @@ for cycles in itertools.count():
 
 '''
 
-logging.info("Some Request's coming in (%s)", request)
+logging.info("Some Request's coming in (%s)", request.decode)
 time.sleep(1) 
-server.send(request)
-print(f'Received request: {request}')
+server.send(b' ACK')
+print(f'Received request: {request.decode}')
