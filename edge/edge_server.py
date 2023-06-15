@@ -9,6 +9,16 @@ import logging
 import sys
 import zmq
 import itertools
+import configparser
+
+# Insert config parser 
+config = configparser.ConfigParser()
+
+# Read the config.ini file
+config.read('config.ini')
+
+# Get the cloud node address from the config.ini file
+cloud_node_address = config.get("Server", "cloud_node_address")
 
 # TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
 
@@ -123,7 +133,7 @@ class EdgeServer:
         Args:
             data (_type_): dict values for node_id and average_power
         """
-        self.client.connect(self.clode_node_address) # needs to be specified in config.ini
+        self.client.connect(self.cloud_node_address) # needs to be specified in config.ini
         
         request = json.dumps(data).encode('utf-8')
         logging.info("Sending request %s", request)
@@ -168,7 +178,7 @@ class EdgeServer:
             # Update the database if sent successfully
             if sent:
                 self.db_handler.update_power_average(id)
-                
+    '''           
     def _recovery_thread(self) -> None:
         """Periodically checks for unsent data and tries to resend it to the clode node."""
         while not self.shutdown:
@@ -178,6 +188,7 @@ class EdgeServer:
                 if self.shutdown:
                     return
                 time.sleep(1)
+    '''
                 
     """
     Failover handling implementation is done.
@@ -190,7 +201,7 @@ class EdgeServer:
         self.producer_thread = Thread(target=self._producer_thread)
         self.consumer_thread.start()
         self.producer_thread.start()
-        self._recovery_thread.start()
+        #self._recovery_thread.start()
         self.ready = True
 
     def stop(self) -> None:
@@ -199,7 +210,7 @@ class EdgeServer:
         self.shutdown = True
         self.consumer_thread.join()
         self.producer_thread.join()
-        self._recovery_thread.join()
+        #self._recovery_thread.join()
         self.consumer.close()
         self.producer.close()
         self.ready = False
