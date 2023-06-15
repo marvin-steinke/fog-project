@@ -22,15 +22,12 @@ class dbHandler:
         if not hasattr(self.thread_local, "conn") or self.thread_local.conn is None:
             self.thread_local.conn = sqlite3.connect(self.db_file)
         return self.thread_local.conn
-        '''
-        try:
-            self.conn = sqlite3.connect(local_db_file)
-        except Error as e:
-            print(e)
-            
-        if self.conn:
-            self.create_schema()
-        '''
+    
+    def close_connection(self):
+        """Close the db connection"""
+        if hasattr(self.thread_local, "conn") and self.thread_local.conn is not None:
+            self.thread_local.conn.close()
+            self.thread_local.conn = None
            
     def create_schema(self):
         """Create the schema for the db"""
@@ -74,7 +71,7 @@ class dbHandler:
         """Update db table when data is sent successfully"""
         connection = self.get_connection()
         try:
-            cursor = self.conn.cursor()
+            cursor = connection.cursor()
             cursor.execute('''
                     UPDATE power_averages
                     SET sent = 1
@@ -88,7 +85,7 @@ class dbHandler:
         """Fetch rows that have not been sent."""
         connection = self.get_connection()  
         try:
-            cursor = self.conn.cursor()
+            cursor = connection.cursor()
             cursor.execute('''
                     SELECT id, node_id, average, timestamp FROM power_averages
                     WHERE sent = 0;
