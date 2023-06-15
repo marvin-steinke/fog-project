@@ -1,0 +1,4 @@
+#zmq==4.3.4
+pyzmq==25.0.0
+confluent_kafka==2.1.1
+kafka_python==2.0.2
