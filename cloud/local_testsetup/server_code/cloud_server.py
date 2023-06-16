@@ -1,47 +1,32 @@
-#
-#  Lazy Pirate server
-#  Binds REQ socket to tcp://*:5555
-#  Like hwserver except:
-#   - echoes request as-is
-#   - randomly runs slowly, or exits to simulate a crash.
-#
-#   Author: Daniel Lundin <dln(at)eintr(dot)org>
-#   Author: Niklas Fomin; extended the code to bind to the edge node
-
-from random import randint
-import itertools
-import logging
-import time
 import zmq
-import json
+import asyncio
+import zmq.asyncio
 
+async def handle_client(server):
+    while True:
+        # Wait for the client's ping message
+        request = await server.recv()
 
-logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
+        if request == b'ping':
+            # Reply with a pong message to acknowledge the connection
+            await server.send(b'pong')
+            print("Received: ping")
+            print("Reply sent: pong")
+        else:
+            # Handle other requests or conditions as needed
+            await server.send(b'unknown')  # Send an appropriate reply
+            print("Received unknown message")
 
-context = zmq.Context()
-server = context.socket(zmq.REP)
-server.bind("tcp://*:49152")
+async def main():
+    context = zmq.asyncio.Context()
+    server = context.socket(zmq.REP)
+    server.bind("tcp://*:37329")
 
+    # Start the server to handle incoming requests
+    while True:
+        # Wait for the client connection
+        client = await server.recv()
+        asyncio.create_task(handle_client(server))
 
-for cycles in itertools.count():
-    request = server.recv()
-'''
-
-    # Simulate various problems, after a few cycles
-    if cycles > 3 and randint(0, 3) == 0:
-        logging.info("Simulating a crash")
-        break
-    elif cycles > 3 and randint(0, 3) == 0:
-        logging.info("Simulating CPU overload")
-        time.sleep(2)
-
-    logging.info("Normal request (%s)", request)
-    time.sleep(1)  # Do some heavy work
-    server.send(request)
-
-'''
-
-logging.info("Some Request's coming in (%s)", request.decode)
-time.sleep(1) 
-server.send(b' ACK')
-print(f'Received request: {request.decode}')
+if __name__ == '__main__':
+    asyncio.run(main())
