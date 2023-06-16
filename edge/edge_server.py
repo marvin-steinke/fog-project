@@ -10,7 +10,8 @@ import sys
 import zmq
 import configparser
 import os
-
+import asyncio
+import zmq.asyncio
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -37,8 +38,13 @@ class EdgeServer:
     """
 
     def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address: str) -> None:
+        
         self.logger = logging.getLogger("EdgeServer")
-
+        
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        cloud_node_address = config.get('Server', 'cloud_node_address')
+        
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.db_handler = db_handler
 
@@ -59,8 +65,25 @@ class EdgeServer:
 
         self.cloud_node_address = cloud_node_address
         self.context = zmq.Context()
-        self.client = self.context.socket(zmq.REQ)
-        self.client.connect(self.cloud_node_address)
+        self.socket = self.context.socket(zmq.REQ)
+        
+        # just for testing
+        # Send a ping message to the server
+    async def _send_ping_pong(self) -> None:
+        """
+        Establishes connection to the cloud node and performs ping-pong communication.
+        """
+        self.socket.connect(self.cloud_node_address)
+        self.socket.send(b'ping')
+        print("message sent")
+
+        # Wait for the pong reply
+        pong_reply = await self.socket.recv()
+        if pong_reply == b'pong':
+            self.logger.info("Received pong from the server. Connection is successful.")
+            print("Received pong from the server. Connection is successful.")
+        else:
+            self.logger.warning("Received unknown reply from the server.")
 
     '''
     # cannot be used yet
@@ -104,15 +127,41 @@ class EdgeServer:
                         print(average)
 
                         id = self.db_handler.insert_power_average(node_id, average)
-                        '''
-                        # cannot be used yet
+    
+        '''
+        # cannot be used yet
+
+        if self.connected:
+            self.send_to_cloud_node({"node_id": node_id, "average_power": average})
+        else:
+            self.logger.warning("Not connected to the cloud node. Stored average power locally.")
+        '''
+        # self._send_to_server(node_id, average)
+        values.clear()
+
+    '''
+    # not for know but soon
                         
-                        if self.connected:
-                            self.send_to_cloud_node({"node_id": node_id, "average_power": average})
-                        else:
-                            self.logger.warning("Not connected to the cloud node. Stored average power locally.")
-                        '''
-                        values.clear()
+    def _send_to_server(self, node_id, average):
+        try:
+            self.socket.connect(self.server_address)
+
+            request_data = {
+                'node_id': node_id,
+                'average': average
+            }
+            request = json.dumps(request_data).encode('utf-8')
+            self.socket.send(request)
+
+            response = self.socket.recv()
+            print(response.decode())
+
+        except zmq.ZMQError as e:
+            print(f"Error occurred while sending data to the server: {e}")
+        finally:
+            self.socket.disconnect(self.server_address)
+    '''
+                        
     '''
     # cannot be used yet
     
@@ -182,7 +231,6 @@ class EdgeServer:
             self.consumer_thread.start()
             self.producer_thread.start()
             self.ready = True
-            self.logger.info("Connected to local Docker host at %s", self.cloud_node_address)
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
@@ -195,6 +243,7 @@ class EdgeServer:
         self.consumer.close()
         self.producer.close()
         self.ready = False
+        #db_handler.truncate_table("power_averages")
         self.db_handler.close_connection()
 
 
@@ -203,6 +252,6 @@ if __name__ == '__main__':
     input_topic = 'input_topic'
     output_topic = 'output_topic'
     db_handler = dbHandler('local.db')
-    cloud_node_address = "tcp://localhost:8080" # should be implemented in the conifg-file
+    cloud_node_address = 'tcp://localhost:37329'
     edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address)
     edge_server.run()
