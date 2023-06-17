@@ -1,7 +1,10 @@
 import zmq
 import json
+import redis
 
-
+# Connect to redis
+r = redis.Redis(host='localhost', port=6379, db=0)
+  
 def handle_client(server):
     while True:
         request = server.recv()
@@ -10,6 +13,8 @@ def handle_client(server):
             print("Received data from node_id:", data['node_id'])
             print("Average value:", data['average'])
             
+            # cache the received data
+            r.hset('node_data', data['node_id'], json.dumps(data))
             response = "Received data successfully"
             server.send(response.encode())
         except json.JSONDecodeError:
