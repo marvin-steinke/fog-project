@@ -2,6 +2,8 @@ import sqlite3
 import os
 from sqlite3 import Error
 import threading
+#import pytz
+#from datetime import datetime
 
 # TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
 
@@ -58,11 +60,13 @@ class dbHandler:
         connection = self.get_connection()
         try:
             cursor = connection.cursor()
+            #timestamp = datetime.now(pytz.timezone('Europe/Stockholm')).strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute('''
                     INSERT INTO power_averages(id, node_id, average)
                 VALUES (NULL, ?, ?);
             ''', (node_id, average))
             connection.commit()
+            self.close_connection()
             return cursor.lastrowid
         except Error as e:
             print(e)
@@ -96,3 +100,18 @@ class dbHandler:
             return []
                     
 
+    # Add function to delete database after simulation
+    def truncate_table(self, table_name):
+        """Truncates a table in the database.
+
+        Args:
+            table_name (str): The name of the table to truncate.
+        """
+        connection = self.get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(f"DELETE FROM {table_name};")
+            connection.commit()
+            print(f"The table '{table_name}' has been truncated.")
+        except Error as e:
+            print(f"An error occurred while truncating the table '{table_name}': {e}")
