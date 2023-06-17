@@ -10,6 +10,8 @@ import sys
 import zmq
 import os
 
+#TODO: Add type ann. + check reliability, use db-failover funcions, zmq context and socket as class attributes, function descriptions
+
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
 

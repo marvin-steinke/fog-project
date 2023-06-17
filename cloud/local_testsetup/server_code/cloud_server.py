@@ -2,6 +2,8 @@ import zmq
 import json
 import redis
 
+#TODO: Add logging for connection estblishment and caching + type annotations + think of further processing of data
+
 # Connect to redis
 r = redis.Redis(host='localhost', port=6379, db=0)
   
