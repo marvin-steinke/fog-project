@@ -10,18 +10,41 @@ co-simulation framework, and uses Apache Kafka for handling real-time data.
 ```
 .
 ├── cloud
-│   └── tf_gcp_node
+│   ├── tf_gcp_node
+│   ├── local_testsetup
+│   │   ├── Dockerfile
+│   │   ├── docker-compose.yml
+│   │   ├── requirements.txt
+│   │   └── cloud_server.py
+│   └── Client
+│       ├── Dockerfile
+│       ├── docker-compose.yml
+│       ├── backend
+│       └── frontend
+│           ├── static
+│           │   ├── css
+│           │   │   └── main.css
+│           │   └── js
+│           │       └── main.js
+│           ├── templates
+│           │   └── index.html
+│           └── requirements.txt
 ├── documents
 └── edge
-    ├── config.ini
-    ├── data
-    ├── docker-compose.yml
-    ├── edge_server.py
-    ├── main.py
-    └── simulator
-        ├── collector.py
-        ├── household.py
-        └── kafka_adapter.py
+    ├── config.ini
+    ├── data
+    ├── docker-compose.yml
+    ├── Dockerfile
+    ├── edge_server.py
+    ├── main.py
+    ├── requirements.txt
+    ├── local_db
+    │   └── db_operations.py
+    └── simulator
+        ├── collector.py
+        ├── household.py
+        └── kafka_adapter.py
+
 ```
 
 Edge Component:
@@ -34,7 +57,9 @@ Edge Component:
 - `main.py`: Contains the main function for starting the simulation.
 - `edge_server.py`: Contains the `EdgeServer` class for reading from and writing to Kafka topics.
 
-## Usage
+## Edge Component
+
+### Usage
 
 1. Set up your Kafka and Zookeeper services. You can use Docker Compose with the provided `docker-compose.yml` file:
 
@@ -57,5 +82,20 @@ If prefered use a virtualenv to install the necessary dependencies to run the ed
 - Python 3.8 or later
 - Mosaik
 - Apache Kafka
+- SQLite
+- ZeroMQ (ZMQ)
 - Docker and Docker Compose (for Kafka and Zookeeper)
 
+## Cloud Component
+
+### Usage
+
+The cloud server uses the `cloud_server.py` file to interact with the edge component. It consumes data from the Kafka server set up on the edge component and processes it. The cloud server can be run either directly or using Docker Compose with the provided `docker-compose.yml` file in the `cloud/local_testsetup` directory.
+
+To run the cloud server with Docker Compose:
+
+### Dependencies
+
+Dependencies for the cloud server can be installed from the `requirements.txt` file in the `cloud/local_testsetup` directory.
+
+- Docker and Docker Compose
