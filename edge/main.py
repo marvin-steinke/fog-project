@@ -15,7 +15,7 @@ sim_args = {
     "end": config.getint("Sim", "end"),
     "household_data_dir": config.get("Sim", "household_data_dir"),
     "kafka_address": config.get("Server", "kafka_address"),
-    "cloud_node_address": config.get("Server", "cloud_node_address")
+    "cloud_node_address": config.get("Server", "cloud_node_address"),
 }
 
 sim_config = {
@@ -47,9 +47,9 @@ def main() -> None:
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
             output_topic="avg_power_topic",
-            db_handler=db_handler, # Pass the db_handler to the EdgeServer
-            cloud_node_address=sim_args["cloud_node_address"]
-    )
+            db_handler=db_handler,
+            cloud_node_address=sim_args["cloud_node_address"],
+    ) 
     
     edge_server.run()
     while not edge_server.ready:
