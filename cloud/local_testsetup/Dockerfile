@@ -16,10 +16,11 @@ RUN apt-get update && apt-get install -y redis-server
 COPY server_code/ .
 
 # Exposing the port
-EXPOSE -p 37328
+EXPOSE 37329
 
-# Run Redis in the background
-CMD redis-server --daemonize yes
+# Create a shell script to run Redis and then your server
+RUN echo '#!/bin/sh\nredis-server --daemonize yes\npython3 cloud_server.py' > start.sh
+RUN chmod +x start.sh
 
-# Run the server code
-CMD ["python3", "cloud_server.py"]
+# Run the script when the container starts
+CMD ["sh", "./start.sh"]
