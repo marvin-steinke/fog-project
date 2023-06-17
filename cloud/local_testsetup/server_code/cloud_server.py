@@ -1,4 +1,6 @@
 import zmq
+import json
+
 
 def handle_client(server):
     while True:
@@ -11,10 +13,19 @@ def handle_client(server):
             print("Received: ping")
             print("Reply sent: pong")
         else:
-            # Handle other requests or conditions as needed
-            server.send(b'unknown')  # Send an appropriate reply
-            print("Received unknown message")
+            try:
+                data = json.loads(request.decode())
+                print("Received data from node_id:", data['node_id'])
+                print("Average value:", data['average'])
+                # Process the received data as needed
+                # ...
+                # Send a response back if required
+                response = "Received data successfully"
+                server.send(response.encode())
+            except json.JSONDecodeError:
+                print("Received unknown message")
 
+    
 def main():
     context = zmq.Context()
     server = context.socket(zmq.REP)

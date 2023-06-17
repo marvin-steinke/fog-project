@@ -96,10 +96,16 @@ class EdgeServer:
                     if values:
                         average = sum(values) / len(values)
                         print(average)
-
+                        print("Node ID:", node_id)
+                        print("Average Power:", average)
+                        
                         id = self.db_handler.insert_power_average(node_id, average)
+                        # send to cloud if connected and insert in db   
+                        if self.cloud_connected:
+                            self._send_to_server(node_id, average)
+                        
     
-                    values.clear()
+                        values.clear()
     
     def _connect_to_server(self) -> None:
         """
@@ -115,13 +121,35 @@ class EdgeServer:
         pong_reply = socket.recv()
         if pong_reply == b'pong':
             print("Received pong from the server. Connection is successful.")
+            self.cloud_connected = True       
         else:
             print("Received unknown reply from the server.")
 
         socket.close()
         context.term()
 
-        
+    def _send_to_server(self, node_id, average):
+        try:
+            context = zmq.Context()
+            socket = context.socket(zmq.REQ)
+            socket.connect(self.cloud_node_address)
+
+            request_data = {
+                'node_id': node_id,
+                'average': average
+            }
+            request = json.dumps(request_data).encode('utf-8')
+            socket.send(request)
+
+            response = socket.recv()
+            print(response.decode())
+
+            socket.close()
+            context.term()
+
+        except zmq.ZMQError as e:
+            print(f"Error occurred while sending data to the server: {e}")
+
         '''
         # cannot be used yet
 
