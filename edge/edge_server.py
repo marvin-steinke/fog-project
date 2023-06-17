@@ -8,10 +8,7 @@ from local_db.db_operations import dbHandler
 import logging
 import sys
 import zmq
-import configparser
 import os
-import asyncio
-import zmq.asyncio
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -37,14 +34,10 @@ class EdgeServer:
         cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address: str) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address) -> None:
         
         self.logger = logging.getLogger("EdgeServer")
-        
-        config = configparser.ConfigParser()
-        config.read('config.ini')
-        cloud_node_address = config.get('Server', 'cloud_node_address')
-        
+        self.cloud_node_address = cloud_node_address        
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.db_handler = db_handler
 
@@ -62,29 +55,7 @@ class EdgeServer:
         self.data: Dict[str, list] = defaultdict(list)
         self.ready = False
         self.shutdown = False
-
-        self.cloud_node_address = cloud_node_address
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.REQ)
         
-        # just for testing
-        # Send a ping message to the server
-    async def _send_ping_pong(self) -> None:
-        """
-        Establishes connection to the cloud node and performs ping-pong communication.
-        """
-        self.socket.connect(self.cloud_node_address)
-        self.socket.send(b'ping')
-        print("message sent")
-
-        # Wait for the pong reply
-        pong_reply = await self.socket.recv()
-        if pong_reply == b'pong':
-            self.logger.info("Received pong from the server. Connection is successful.")
-            print("Received pong from the server. Connection is successful.")
-        else:
-            self.logger.warning("Received unknown reply from the server.")
-
     '''
     # cannot be used yet
     def _maintain_connection_thread(self):
@@ -128,6 +99,29 @@ class EdgeServer:
 
                         id = self.db_handler.insert_power_average(node_id, average)
     
+                    values.clear()
+    
+    def _connect_to_server(self) -> None:
+        """
+        Establishes connection to the cloud node and performs ping-pong communication.
+        """
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.connect(self.cloud_node_address)
+        socket.send(b'ping')
+        print("message sent")
+
+        # Wait for the pong reply
+        pong_reply = socket.recv()
+        if pong_reply == b'pong':
+            print("Received pong from the server. Connection is successful.")
+        else:
+            print("Received unknown reply from the server.")
+
+        socket.close()
+        context.term()
+
+        
         '''
         # cannot be used yet
 
@@ -137,7 +131,7 @@ class EdgeServer:
             self.logger.warning("Not connected to the cloud node. Stored average power locally.")
         '''
         # self._send_to_server(node_id, average)
-        values.clear()
+            
 
     '''
     # not for know but soon
@@ -231,6 +225,7 @@ class EdgeServer:
             self.consumer_thread.start()
             self.producer_thread.start()
             self.ready = True
+            self._connect_to_server()
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
@@ -251,7 +246,8 @@ if __name__ == '__main__':
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'
     output_topic = 'output_topic'
-    db_handler = dbHandler('local.db')
     cloud_node_address = 'tcp://localhost:37329'
+    db_handler = dbHandler('local.db')
     edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address)
     edge_server.run()
+    
