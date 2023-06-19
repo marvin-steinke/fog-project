@@ -20,6 +20,7 @@ co-simulation framework, and uses Apache Kafka for handling real-time data.
 │       ├── Dockerfile
 │       ├── docker-compose.yml
 │       ├── backend
+        
 │       └── frontend
 │           ├── static
 │           │   ├── css
@@ -57,8 +58,6 @@ Edge Component:
 - `main.py`: Contains the main function for starting the simulation.
 - `edge_server.py`: Contains the `EdgeServer` class for reading from and writing to Kafka topics.
 
-## Edge Component
-
 ### Usage
 
 1. Set up your Kafka and Zookeeper services. You can use Docker Compose with the provided `docker-compose.yml` file:
@@ -86,7 +85,7 @@ If prefered use a virtualenv to install the necessary dependencies to run the ed
 - ZeroMQ (ZMQ)
 - Docker and Docker Compose (for Kafka and Zookeeper)
 
-## Cloud Component
+Cloud Component
 
 ### Usage
 
