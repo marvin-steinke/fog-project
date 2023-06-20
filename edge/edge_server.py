@@ -9,8 +9,7 @@ import logging
 import sys
 import zmq
 import os
-
-#TODO: Add type ann. + check reliability, use db-failover functions, add logic for failover-handling, zmq context and socket as class attributes, function descriptions
+import sqlite3
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -36,14 +35,14 @@ class EdgeServer:
         cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address: str) -> None:
         
         self.logger = logging.getLogger("EdgeServer")
         self.cloud_node_address = cloud_node_address        
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.db_handler = db_handler
-        #self.context = zmq.Context()
-        #self.socket = self.context.socket(zmq.REQ)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.REQ)
 
         self.consumer = KafkaConsumer(
             input_topic,
@@ -95,6 +94,7 @@ class EdgeServer:
                         
                         values.clear()
     
+    '''
     def _connect_to_server(self) -> None:
         """
         Establishes connection to the cloud node and performs ping-pong communication.
@@ -112,56 +112,78 @@ class EdgeServer:
             except zmq.ZMQError:
                 print("Failed to connect to the server. Retrying...")
                 time.sleep(2)
+    '''
 
-    def _send_to_server(self, node_id, average):
+    def connection_thread(self) -> None:
+        """Thread that continually checks for connection and sets the cloud_connected flag."""
+        while not self.shutdown:
+            try:
+                self.socket.connect(self.cloud_node_address)
+                self.cloud_connected
+            except zmq.ZMQError:
+                self.cloud_connected = False
+            time.sleep(3)
+
+    def _send_to_server(self, node_id: str, average: float) -> None:
+        """Send the computed average values to the cloud server."""
+        if not self.cloud_connected:
+            return False
         try:
-            context = zmq.Context()
-            socket = context.socket(zmq.REQ)
-            socket.connect(self.cloud_node_address)
-
             request_data = {
                 'node_id': node_id,
                 'average': average
             }
             request = json.dumps(request_data).encode('utf-8')
-            socket.send(request)
-
-            response = socket.recv()
+            self.socket.send(request)
+            response = self.socket.recv()
             print(response.decode())
-
-            socket.close()
-            context.term()
-
+            return True
         except zmq.ZMQError as e:
             print(f"Error occurred while sending data to the server: {e}")
+            return False
+        
+    def _send_unsent_data(self) -> None:
+        """Fetches unsent data from the local db, sends it to the cloud, and updates the status flag in the row.
+        """
+        while not self.shutdown:
+            unsent_data = self.db_handler.get_unsent_power_averages()
+            for row in unsent_data:
+                id, node_id, average, timestamp = row
+                data = {"node_id": node_id, "average_power": average}
+                sent_successfully = self.send_to_cloud_node(data)
+                if sent_successfully:
+                    self.db_handler.update_power_average(id)
+                else:
+                    self.logger.error("Failed to send unsent data with id {} to the cloud node.".format(id))
+            time.sleep(3)
 
-    '''
-    # cannot be used yet    
-    def _send_unsent_data(self):
-        """
-        Fetches unsent data from the database, sends it to the cloud, and updates
-        their sent status.
-        """
-        unsent_data = self.db_handler.get_unsent_power_averages()
-        for row in unsent_data:
-            id, node_id, average, timestamp = row
-            data = {"node_id": node_id, "average_power": average}
-            sent_successfully = self.send_to_cloud_node(data)
-            if sent_successfully:
-                self.db_handler.update_power_average(id)
-            else:
-                self.logger.error("Failed to send unsent data with id {} to the cloud node.".format(id))
-    '''
+    def _receive_from_server(self) -> None:
+        while not self.shutdown:
+            if not self.cloud_connected:
+                time.sleep(1)
+                continue
+            try:
+                response = self.socket.recv()
+                print
+            except zmq.ZMQError as e:
+                print(f"Error occurred while receiving data from the server: {e}")
+
+
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
         attribute to True."""
         try:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
+            self.connection_check_thread = Thread(target=self.connection_thread)
+            self.unsent_data_thread = Thread(target=self._send_unsent_data)
+            self._receive_from_server_thread = Thread(target=self._receive_from_server)
             self.consumer_thread.start()
             self.producer_thread.start()
+            self.connection_check_thread.start()
+            self.unsent_data_thread.start()
+            self._receive_from_server_thread.start()
             self.ready = True
-            self._connect_to_server()
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
@@ -170,6 +192,9 @@ class EdgeServer:
         attribute to False."""
         self.shutdown = True
         self.consumer_thread.join()
+        self.connection_check_thread.join()
+        self.unsent_data_thread.join()
+        self._receive_from_server_thread.join()
         self.producer_thread.join()
         self.consumer.close()
         self.producer.close()
