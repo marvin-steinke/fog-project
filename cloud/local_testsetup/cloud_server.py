@@ -5,12 +5,8 @@ import logging
 from typing import Any
 
 logging.basicConfig(level=logging.INFO)
-# Connect to redis
+# Connect to Redis
 r = redis.Redis(host='redis', port=6379, db=0)
-
-import json
-import logging
-import zmq
 
 def handle_client(server: zmq.Socket) -> None:
     """Handle client's requests and responses.
@@ -30,21 +26,21 @@ def handle_client(server: zmq.Socket) -> None:
             logging.info(f"Received data from node_id: {node_id}")
             logging.info(f"Average value: {average}")
 
-            # cache the received data
-            r.hset('node_data', node_id, json.dumps(data))
+            # Cache the received data
+            r.rpush('node_data', json.dumps(data))
             response = "Received data successfully"
             server.send(response.encode())
         except json.JSONDecodeError:
             logging.error("Failed to decode JSON message")
 
-
 def main():
-    """Main function to initialize the server and handle the edge servers requests."""
+    """Main function to initialize the server and handle the edge servers' requests."""
     context = zmq.Context()
     server = context.socket(zmq.REP)
     server.bind("tcp://*:37329")
 
     logging.info("Server started listening at tcp port://*:37329")
+
     # Start the server to handle incoming requests
     handle_client(server)
 
