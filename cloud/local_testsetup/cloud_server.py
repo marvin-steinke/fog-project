@@ -15,7 +15,14 @@ def handle_client(server: zmq.Socket) -> None:
         server (zmq.Socket): The server socket instance.
     """
     while True:
-        request = server.recv()
+        try:
+            request = server.recv()
+        except AttributeError:
+            logging.warning("Server socket closed. Rebinding the server socket.")
+            server.unbind("tcp://*:37329")
+            server.bind("tcp://*:37329")
+            continue
+
         if request == b'ping':
             server.send(b'pong')
             continue
@@ -27,7 +34,7 @@ def handle_client(server: zmq.Socket) -> None:
             logging.info(f"Average value: {average}")
 
             # Cache the received data
-            r.rpush('node_data', json.dumps(data))
+            r.hset('node_data', node_id, json.dumps(data))
             response = "Received data successfully"
             server.send(response.encode())
         except json.JSONDecodeError:

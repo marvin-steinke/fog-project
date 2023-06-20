@@ -115,8 +115,6 @@ class dbHandler:
             logging.error(f"Error while fetching unsent power averages: {e}")
             return []
                     
-
-    # Add function to delete database after simulation
     def truncate_table(self, table_name: str):
         """Truncates a table in the database.
 

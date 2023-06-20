@@ -9,6 +9,7 @@ import logging
 import sys
 import zmq
 import os
+import multiprocessing
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -34,12 +35,13 @@ class EdgeServer:
         cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler, cloud_node_address: str) -> None:
-        
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler,
+                 cloud_node_address: str) -> None:
         self.logger = logging.getLogger("EdgeServer")
-        self.cloud_node_address = cloud_node_address        
+        self.cloud_node_address = cloud_node_address
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.cloud_connected = False
+        self.producer_thread_stop_requested = False
         self.db_handler = db_handler
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
@@ -59,8 +61,7 @@ class EdgeServer:
         self.data: Dict[str, list] = defaultdict(list)
         self.ready = False
         self.shutdown = False
-        
-    
+
     def _consumer_thread(self) -> None:
         """Consumes messages from the input Kafka topic and stores the values
         in the data attribute."""
@@ -75,7 +76,7 @@ class EdgeServer:
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic."""
-        while not self.shutdown:
+        while not self.shutdown and not self.producer_thread_stop_requested:
             for _ in range(5):
                 if self.shutdown:
                     return
@@ -87,16 +88,19 @@ class EdgeServer:
                         print(average)
                         print("Node ID:", node_id)
                         print("Average Power:", average)
-                        
+
                         id = self.db_handler.insert_power_average(node_id, average)
-                        # send to cloud if connected and insert in db   
+                        # send to cloud if connected and insert in db
                         if self.cloud_connected:
                             self._send_to_server(id, node_id, average)
-                        
+
                         values.clear()
-    
+
     def connection_thread(self) -> None:
-        """Thread that continually checks for connection and sets the cloud_connected flag."""
+        """
+        Thread that continually checks for connection and sets the cloud_connected flag.
+        """
+        prev_connection_status = False
         while not self.shutdown:
             if not self.cloud_connected:
                 try:
@@ -112,7 +116,11 @@ class EdgeServer:
                     print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
                     time.sleep(2)
             else:
-                time.sleep(5)
+                if not prev_connection_status:
+                    # If the connection was restored, send unsent data
+                    self._send_unsent_data()
+                prev_connection_status = True
+            time.sleep(5)
 
 
     def _send_to_server(self, id: int, node_id: str, average: float) -> None:
@@ -134,10 +142,9 @@ class EdgeServer:
         except zmq.ZMQError as e:
             print(f"Error occurred while sending data to the server: {e}")
             return False
-        
+
     def _send_unsent_data(self) -> None:
-        """Fetches unsent data from the local db, sends it to the cloud, and updates the status flag in the row.
-        """
+        """Fetches unsent data from the local db, sends it to the cloud, and updates the status flag in the row."""
         while not self.shutdown:
             unsent_data = self.db_handler.get_unsent_power_averages()
             for row in unsent_data:
@@ -147,8 +154,9 @@ class EdgeServer:
                 if sent_successfully:
                     self.db_handler.update_power_average(id)
                 else:
-                    self.logger.error("Failed to send unsent data with id {} to the cloud node.".format(id))
+                    self.logger.error(f"Failed to send unsent data with id {id} to the cloud node.")
             time.sleep(3)
+
 
     def _receive_from_server(self) -> None:
         while not self.shutdown:
@@ -157,10 +165,10 @@ class EdgeServer:
                 continue
 
             try:
-                self.socket.setsockopt(zmq.RCVTIMEO, 2000)  # Set timeout to 2000 milliseconds
+                self.socket.setsockopt(zmq.RCVTIMEO, 5000)  
                 try:
-                    events = self.socket.poll(timeout=2000)  # Poll the socket for events
-                    if events & zmq.POLLIN:  # Check if there is incoming data
+                    events = self.socket.poll(timeout=5000)  
+                    if events & zmq.POLLIN:  
                         data = self.socket.recv()
                         if data:
                             try:
@@ -179,7 +187,6 @@ class EdgeServer:
 
             if self.shutdown:
                 break
-
 
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
@@ -206,14 +213,18 @@ class EdgeServer:
         self.consumer_thread.join()
         self.connection_check_thread.join()
         self.unsent_data_thread.join()
-        self._receive_from_server_thread.join()  
-        self.producer_thread.join()
+        self._receive_from_server_thread.join()
+        self.producer_thread_stop_requested = True  # Request producer thread termination
+        self.producer_thread.join(timeout=1)  # Wait for the producer thread to terminate gracefully
+
         self.consumer.close()
         self.producer.close()
         self.ready = False
-        time.sleep(30) # to check db entries :)
+        time.sleep(10)  # to check db entries :)
         self.db_handler.truncate_table("power_averages")
         self.db_handler.close_connection()
+        multiprocessing.active_children
+        multiprocessing.util._exit_function()
 
 
 if __name__ == '__main__':
@@ -224,4 +235,3 @@ if __name__ == '__main__':
     db_handler = dbHandler('local.db')
     edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address)
     edge_server.run()
-    
