@@ -73,7 +73,7 @@ class dbHandler:
                 VALUES (NULL, ?, ?);
             ''', (node_id, average))
             connection.commit()
-            self.close_connection()
+            #self.close_connection()
             logging.info(f"Inserted power average for node_id {node_id} successfully.")
             return cursor.lastrowid
         except Error as e:

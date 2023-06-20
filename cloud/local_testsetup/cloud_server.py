@@ -7,7 +7,11 @@ from typing import Any
 logging.basicConfig(level=logging.INFO)
 # Connect to redis
 r = redis.Redis(host='redis', port=6379, db=0)
-  
+
+import json
+import logging
+import zmq
+
 def handle_client(server: zmq.Socket) -> None:
     """Handle client's requests and responses.
 
@@ -16,26 +20,30 @@ def handle_client(server: zmq.Socket) -> None:
     """
     while True:
         request = server.recv()
+        if request == b'ping':
+            server.send(b'pong')
+            continue
         try:
             data = json.loads(request.decode())
-            logging.info(f"Received data from node_id: {data.get('node_id', 'Unknown')}")
-            logging.info(f"Average value: {data.get('average', 'Unknown')}")
-            try:
-                # cache the received data
-                r.hset('node_data', data['node_id'], json.dumps(data))
-                response = "Received data successfully"
-                server.send(response.encode())
-            except json.JSONDecodeError:
-                logging.error("Received unknown message")
+            node_id = data.get('node_id', 'Unknown')
+            average = data.get('average', 'Unknown')
+            logging.info(f"Received data from node_id: {node_id}")
+            logging.info(f"Average value: {average}")
+
+            # cache the received data
+            r.hset('node_data', node_id, json.dumps(data))
+            response = "Received data successfully"
+            server.send(response.encode())
         except json.JSONDecodeError:
-            logging.error("Failed to decode JSON request")
-    
+            logging.error("Failed to decode JSON message")
+
+
 def main():
     """Main function to initialize the server and handle the edge servers requests."""
     context = zmq.Context()
     server = context.socket(zmq.REP)
     server.bind("tcp://*:37329")
-    
+
     logging.info("Server started listening at tcp port://*:37329")
     # Start the server to handle incoming requests
     handle_client(server)

@@ -9,7 +9,6 @@ import logging
 import sys
 import zmq
 import os
-import sqlite3
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -40,9 +39,11 @@ class EdgeServer:
         self.logger = logging.getLogger("EdgeServer")
         self.cloud_node_address = cloud_node_address        
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
+        self.cloud_connected = False
         self.db_handler = db_handler
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.RCVTIMEO = 2000
 
         self.consumer = KafkaConsumer(
             input_topic,
@@ -90,46 +91,37 @@ class EdgeServer:
                         id = self.db_handler.insert_power_average(node_id, average)
                         # send to cloud if connected and insert in db   
                         if self.cloud_connected:
-                            self._send_to_server(node_id, average)
+                            self._send_to_server(id, node_id, average)
                         
                         values.clear()
     
-    '''
-    def _connect_to_server(self) -> None:
-        """
-        Establishes connection to the cloud node and performs ping-pong communication.
-        """
-        context = zmq.Context()
-        socket = context.socket(zmq.REQ)
-        
-        while not self.shutdown:
-            try:
-                socket.connect(self.cloud_node_address)
-                print("Connected to the server")
-                self.cloud_connected = True
-                break
-        
-            except zmq.ZMQError:
-                print("Failed to connect to the server. Retrying...")
-                time.sleep(2)
-    '''
-
     def connection_thread(self) -> None:
         """Thread that continually checks for connection and sets the cloud_connected flag."""
         while not self.shutdown:
-            try:
-                self.socket.connect(self.cloud_node_address)
-                self.cloud_connected
-            except zmq.ZMQError:
-                self.cloud_connected = False
-            time.sleep(3)
+            if not self.cloud_connected:
+                try:
+                    self.socket.connect(self.cloud_node_address)
+                    self.socket.send(b'ping')
+                    response = self.socket.recv()
+                    if response != b'pong':
+                        raise ValueError("Unexpected response")
+                    self.cloud_connected = True
+                    print("Successfully connected to the server.")
+                except (zmq.ZMQError, ValueError) as e:
+                    self.cloud_connected = False
+                    print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
+                    time.sleep(2)
+            else:
+                time.sleep(5)
 
-    def _send_to_server(self, node_id: str, average: float) -> None:
+
+    def _send_to_server(self, id: int, node_id: str, average: float) -> None:
         """Send the computed average values to the cloud server."""
         if not self.cloud_connected:
             return False
         try:
             request_data = {
+                'id': id,
                 'node_id': node_id,
                 'average': average
             }
@@ -137,6 +129,7 @@ class EdgeServer:
             self.socket.send(request)
             response = self.socket.recv()
             print(response.decode())
+            self.db_handler.update_power_average(id)
             return True
         except zmq.ZMQError as e:
             print(f"Error occurred while sending data to the server: {e}")
@@ -150,7 +143,7 @@ class EdgeServer:
             for row in unsent_data:
                 id, node_id, average, timestamp = row
                 data = {"node_id": node_id, "average_power": average}
-                sent_successfully = self.send_to_cloud_node(data)
+                sent_successfully = self._send_to_server(id, node_id, average)
                 if sent_successfully:
                     self.db_handler.update_power_average(id)
                 else:
@@ -162,11 +155,30 @@ class EdgeServer:
             if not self.cloud_connected:
                 time.sleep(1)
                 continue
+
             try:
-                response = self.socket.recv()
-                print
+                self.socket.setsockopt(zmq.RCVTIMEO, 2000)  # Set timeout to 2000 milliseconds
+                try:
+                    events = self.socket.poll(timeout=2000)  # Poll the socket for events
+                    if events & zmq.POLLIN:  # Check if there is incoming data
+                        data = self.socket.recv()
+                        if data:
+                            try:
+                                data = json.loads(data)
+                                if 'id' in data:
+                                    self.db_handler.update_power_average(data['id'])
+                                else:
+                                    print("Received data doesn't contain 'id' field")
+                            except json.JSONDecodeError:
+                                print("Received data is not in valid JSON format")
+                except zmq.Again:
+                    print("Timeout occurred while receiving data from the server")
+                    continue
             except zmq.ZMQError as e:
                 print(f"Error occurred while receiving data from the server: {e}")
+
+            if self.shutdown:
+                break
 
 
     def run(self) -> None:
@@ -194,12 +206,13 @@ class EdgeServer:
         self.consumer_thread.join()
         self.connection_check_thread.join()
         self.unsent_data_thread.join()
-        self._receive_from_server_thread.join()
+        self._receive_from_server_thread.join()  
         self.producer_thread.join()
         self.consumer.close()
         self.producer.close()
         self.ready = False
-        #db_handler.truncate_table("power_averages")
+        time.sleep(30) # to check db entries :)
+        self.db_handler.truncate_table("power_averages")
         self.db_handler.close_connection()
 
 
