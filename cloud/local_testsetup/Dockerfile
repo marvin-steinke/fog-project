@@ -5,7 +5,7 @@ FROM python:3.10.6
 WORKDIR /fog-app
 
 # Install dependencies
-COPY server_code/requirements.txt .
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 RUN apt-get update && apt-get install -y libzmq3-dev
 RUN pip install --upgrade pyzmq
@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y net-tools
 RUN apt-get update && apt-get install -y redis-server
 
 # Copying the source code
-COPY server_code/ .
+COPY . /fog-app
 
 # Exposing the port
 EXPOSE 37329

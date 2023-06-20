@@ -76,7 +76,7 @@ class EdgeServer:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic."""
         while not self.shutdown:
-            for _ in range(10):
+            for _ in range(5):
                 if self.shutdown:
                     return
                 time.sleep(1)

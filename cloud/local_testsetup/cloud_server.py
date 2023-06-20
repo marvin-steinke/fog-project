@@ -5,7 +5,7 @@ import redis
 #TODO: Add logging for connection estblishment and caching + type annotations + think of further processing of data
 
 # Connect to redis
-r = redis.Redis(host='localhost', port=6379, db=0)
+r = redis.Redis(host='redis', port=6379, db=0)
   
 def handle_client(server):
     while True:
