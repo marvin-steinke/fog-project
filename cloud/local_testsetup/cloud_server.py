@@ -1,60 +1,56 @@
-import zmq
 import json
 import redis
 import logging
 from typing import Any
+import pynng
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 # Connect to Redis
 r = redis.Redis(host='redis', port=6379, db=0)
 
-def handle_client(server: zmq.Socket) -> None:
-    """Handle client's requests and responses.
+async def receive_heartbeat():
+    with pynng.Pair0() as heartbeat_socket:
+        heartbeat_socket.listen('tcp://localhost:63270')
+        while True:
+            message = await heartbeat_socket.arecv()
+            if message == b'heartbeat':
+                print('Received heartbeat message')
 
-    Args:
-        server (zmq.Socket): The server socket instance.
-    """
-    while True:
-        try:
-            request = server.recv()
-        except AttributeError:
-            logging.warning("Server socket closed. Rebinding the server socket.")
-            server.unbind("tcp://*:37329")
-            server.bind("tcp://*:37329")
-            continue
+# def handle_client(server: zmq.Socket) -> None:
+#     """Handle client's requests and responses.
 
-        if request == b'ping':
-            server.send(b'pong')
-            continue
-        try:
-            data = json.loads(request.decode())
-            node_id = data.get('node_id', 'Unknown')
-            average = data.get('average', 'Unknown')
-            logging.info(f"Received data from node_id: {node_id}")
-            logging.info(f"Average value: {average}")
+#     Args:
+#         server (zmq.Socket): The server socket instance.
+#     """
+#     while True:
+#         try:
+#             request = server.recv()
+#         except AttributeError:
+#             logging.warning("Server socket closed. Rebinding the server socket.")
+#             server.unbind("tcp://*:37329")
+#             server.bind("tcp://*:37329")
+#             continue
 
-            # Cache the received data
-            r.hset('node_data', node_id, json.dumps(data))
-            response = "Received data successfully"
-            server.send(response.encode())
-        except json.JSONDecodeError:
-            logging.error("Failed to decode JSON message")
+#         if request == b'ping':
+#             server.send(b'pong')
+#             continue
+#         try:
+#             data = json.loads(request.decode())
+#             node_id = data.get('node_id', 'Unknown')
+#             average = data.get('average', 'Unknown')
+#             logging.info(f"Received data from node_id: {node_id}")
+#             logging.info(f"Average value: {average}")
 
-def main():
-    """Main function to initialize the server and handle the edge servers' requests."""
-    context = zmq.Context()
-    server = context.socket(zmq.REP)
-    server.bind("tcp://*:37329")
+#             # Cache the received data
+#             r.hset('node_data', node_id, json.dumps(data))
+#             response = "Received data successfully"
+#             server.send(response.encode())
+#         except json.JSONDecodeError:
+#             logging.ecrror("Failed to decode JSON message")
 
-    logging.info("Server started listening at tcp port://*:37329")
+async def main():
+    await receive_heartbeat()
+    print(f'Server is running')
 
-    # Start the server to handle incoming requests
-    handle_client(server)
-
-    # Close the socket when finished
-    server.close()
-    context.term()
-    logging.info("Server closed successfully.")
-
-if __name__ == '__main__':
-    main()
+asyncio.run(main())

@@ -5,11 +5,14 @@ services:
     build: .
     ports:
       - "37329:37329"
+      - "63270:63270"
     depends_on: 
       - redis
+    command: sh -c "python3 cloud_server.py && tail -f /dev/null"
   redis:
     image: "redis:alpine"
     volumes:
       - redis-data:/data
 volumes:
   redis-data:
+    external: false

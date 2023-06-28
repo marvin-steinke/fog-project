@@ -10,6 +10,7 @@ import sys
 import zmq
 import os
 import multiprocessing
+import pynng
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -41,11 +42,8 @@ class EdgeServer:
         self.cloud_node_address = cloud_node_address
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.cloud_connected = False
-        self.producer_thread_stop_requested = False
+        #self.producer_thread_stop_requested = False
         self.db_handler = db_handler
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.REQ)
-        self.socket.RCVTIMEO = 2000
 
         self.consumer = KafkaConsumer(
             input_topic,
@@ -76,7 +74,7 @@ class EdgeServer:
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic."""
-        while not self.shutdown and not self.producer_thread_stop_requested:
+        while not self.shutdown:
             for _ in range(5):
                 if self.shutdown:
                     return
@@ -91,8 +89,8 @@ class EdgeServer:
 
                         id = self.db_handler.insert_power_average(node_id, average)
                         # send to cloud if connected and insert in db
-                        if self.cloud_connected:
-                            self._send_to_server(id, node_id, average)
+                        # if self.cloud_connected:
+                        #     self._send_to_server(id, node_id, average)
 
                         values.clear()
 
@@ -102,25 +100,26 @@ class EdgeServer:
         """
         prev_connection_status = False
         while not self.shutdown:
-            if not self.cloud_connected:
-                try:
-                    self.socket.connect(self.cloud_node_address)
-                    self.socket.send(b'ping')
-                    response = self.socket.recv()
-                    if response != b'pong':
-                        raise ValueError("Unexpected response")
-                    self.cloud_connected = True
+            #if not self.cloud_connected:
+            try:
+                with pynng.Pair0() as socket:
+                    socket.dial('tcp://localhost:63270')
+                    socket.send(b'heartbeat')
+                    # response = socket.recv()
+                    # if response != b'ack':
+                    #     raise ValueError("Unexpected response")
+                    # self.cloud_connected = True
                     print("Successfully connected to the server.")
-                except (zmq.ZMQError, ValueError) as e:
-                    self.cloud_connected = False
-                    print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
-                    time.sleep(2)
-            else:
-                if not prev_connection_status:
-                    # If the connection was restored, send unsent data
-                    self._send_unsent_data()
-                prev_connection_status = True
-            time.sleep(5)
+            except (pynng.exceptions.Timeout, ValueError) as e:
+                #self.cloud_connected = False
+                print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
+                time.sleep(2)
+            # else:
+            #     if not prev_connection_status:
+            #         # If the connection was restored, send unsent data
+            #         self._send_unsent_data()
+            #     prev_connection_status = True
+        #time.sleep(5)
 
 
     def _send_to_server(self, id: int, node_id: str, average: float) -> None:
@@ -195,13 +194,14 @@ class EdgeServer:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
             self.connection_check_thread = Thread(target=self.connection_thread)
-            self.unsent_data_thread = Thread(target=self._send_unsent_data)
-            self._receive_from_server_thread = Thread(target=self._receive_from_server)
+            #self.unsent_data_thread = Thread(target=self._send_unsent_data)
+            #self._receive_from_server_thread = Thread(target=self._receive_from_server)
+            self.db_handler.truncate_table("power_averages")
             self.consumer_thread.start()
             self.producer_thread.start()
             self.connection_check_thread.start()
-            self.unsent_data_thread.start()
-            self._receive_from_server_thread.start()
+            #self.unsent_data_thread.start()
+            #self._receive_from_server_thread.start()
             self.ready = True
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
@@ -212,21 +212,19 @@ class EdgeServer:
         self.shutdown = True
         self.consumer_thread.join()
         self.connection_check_thread.join()
-        self.unsent_data_thread.join()
-        self._receive_from_server_thread.join()
-        self.producer_thread_stop_requested = True  # Request producer thread termination
+        #self.unsent_data_thread.join()
+        #self._receive_from_server_thread.join()
+        #self.producer_thread_stop_requested = True  # Request producer thread termination
         self.producer_thread.join(timeout=1)  # Wait for the producer thread to terminate gracefully
 
         self.consumer.close()
         self.producer.close()
+        #self.connection_check_thread.close()
         self.ready = False
         time.sleep(10)  # to check db entries :)
         self.db_handler.truncate_table("power_averages")
         self.db_handler.close_connection()
-        multiprocessing.active_children
-        multiprocessing.util._exit_function()
-
-
+        
 if __name__ == '__main__':
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'

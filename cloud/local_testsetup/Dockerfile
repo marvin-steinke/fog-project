@@ -8,19 +8,17 @@ WORKDIR /fog-app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 RUN apt-get update && apt-get install -y libzmq3-dev
-RUN pip install --upgrade pyzmq
 RUN apt-get update && apt-get install -y net-tools
 RUN apt-get update && apt-get install -y redis-server
+RUN pip install pynng
+RUN pip install asyncio
 
 # Copying the source code
 COPY . /fog-app
 
-# Exposing the port
+# Exposing the ports
 EXPOSE 37329
+EXPOSE 63270
 
-# Create a shell script to run Redis and then your server
-RUN echo '#!/bin/sh\nredis-server --daemonize yes\npython3 cloud_server.py' > start.sh
-RUN chmod +x start.sh
-
-# Run the script when the container starts
-CMD ["sh", "./start.sh"]
+# Specify the command to execute the server script
+CMD ["python3", "cloud_server.py"]
