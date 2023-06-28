@@ -6,10 +6,8 @@ from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 from local_db.db_operations import dbHandler
 import logging
-import sys
 import zmq
 import os
-import multiprocessing
 import pynng
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
@@ -33,16 +31,13 @@ class EdgeServer:
         input_topic (str): The input Kafka topic to consume messages from.
         output_topic (str): The output Kafka topic to produce messages to.
         db_handler (dbHandler): The dbHandler object to handle db operations.
-        cloud_node_address (str): The address of the cloud node.
     """
 
-    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler,
-                 cloud_node_address: str) -> None:
+    def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler) -> None:
+        
         self.logger = logging.getLogger("EdgeServer")
-        self.cloud_node_address = cloud_node_address
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.cloud_connected = False
-        #self.producer_thread_stop_requested = False
         self.db_handler = db_handler
 
         self.consumer = KafkaConsumer(
@@ -88,9 +83,9 @@ class EdgeServer:
                         print("Average Power:", average)
 
                         id = self.db_handler.insert_power_average(node_id, average)
-                        # send to cloud if connected and insert in db
-                        # if self.cloud_connected:
-                        #     self._send_to_server(id, node_id, average)
+                        #send to cloud if connected and insert in db
+                        if self.cloud_connected:
+                             self._send_to_server(id, node_id, average)
 
                         values.clear()
 
@@ -99,19 +94,18 @@ class EdgeServer:
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
         prev_connection_status = False
-        while not self.shutdown:
-            #if not self.cloud_connected:
+        while not self.shutdown and not self.cloud_connected:
             try:
                 with pynng.Pair0() as socket:
                     socket.dial('tcp://localhost:63270')
                     socket.send(b'heartbeat')
-                    # response = socket.recv()
-                    # if response != b'ack':
-                    #     raise ValueError("Unexpected response")
-                    # self.cloud_connected = True
+                    response = socket.recv()
+                    if response != b'ack':
+                        raise ValueError("Unexpected response")
+                    self.cloud_connected = True
                     print("Successfully connected to the server.")
             except (pynng.exceptions.Timeout, ValueError) as e:
-                #self.cloud_connected = False
+                self.cloud_connected = False
                 print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
                 time.sleep(2)
             # else:
@@ -119,7 +113,7 @@ class EdgeServer:
             #         # If the connection was restored, send unsent data
             #         self._send_unsent_data()
             #     prev_connection_status = True
-        #time.sleep(5)
+        time.sleep(5)
 
 
     def _send_to_server(self, id: int, node_id: str, average: float) -> None:
@@ -127,21 +121,24 @@ class EdgeServer:
         if not self.cloud_connected:
             return False
         try:
+            socket = pynng.Pub0()
+            socket.dial('tcp://localhost:63271')
+        
             request_data = {
                 'id': id,
                 'node_id': node_id,
                 'average': average
             }
             request = json.dumps(request_data).encode('utf-8')
-            self.socket.send(request)
-            response = self.socket.recv()
-            print(response.decode())
-            self.db_handler.update_power_average(id)
+            socket.send(request)
+            print("Sent data to the server.")
+            self.db_handler.update_sent_flag(id)
+            socket.close()
             return True
-        except zmq.ZMQError as e:
+        except pynng.NNGException as e:
             print(f"Error occurred while sending data to the server: {e}")
             return False
-
+    
     def _send_unsent_data(self) -> None:
         """Fetches unsent data from the local db, sends it to the cloud, and updates the status flag in the row."""
         while not self.shutdown:
@@ -149,11 +146,11 @@ class EdgeServer:
             for row in unsent_data:
                 id, node_id, average, timestamp = row
                 data = {"node_id": node_id, "average_power": average}
-                sent_successfully = self._send_to_server(id, node_id, average)
-                if sent_successfully:
-                    self.db_handler.update_power_average(id)
-                else:
-                    self.logger.error(f"Failed to send unsent data with id {id} to the cloud node.")
+                #sent_successfully = self._send_to_server(id, node_id, average)
+                # if sent_successfully:
+                #     self.db_handler.update_sent_flag(id)
+                # else:
+                #     self.logger.error(f"Failed to send unsent data with id {id} to the cloud node.")
             time.sleep(3)
 
 
@@ -162,30 +159,29 @@ class EdgeServer:
             if not self.cloud_connected:
                 time.sleep(1)
                 continue
-
             try:
-                self.socket.setsockopt(zmq.RCVTIMEO, 5000)  
-                try:
-                    events = self.socket.poll(timeout=5000)  
-                    if events & zmq.POLLIN:  
-                        data = self.socket.recv()
-                        if data:
-                            try:
-                                data = json.loads(data)
-                                if 'id' in data:
-                                    self.db_handler.update_power_average(data['id'])
-                                else:
-                                    print("Received data doesn't contain 'id' field")
-                            except json.JSONDecodeError:
-                                print("Received data is not in valid JSON format")
-                except zmq.Again:
-                    print("Timeout occurred while receiving data from the server")
-                    continue
-            except zmq.ZMQError as e:
+                with pynng.Sub0() as socket:
+                    socket.listen('tcp://localhost:63272')
+                    socket.subscribe(b'')
+                    while True:
+                        try:
+                            message = socket.recv()
+                            if message:
+                                try:
+                                    data = message.decode('utf-8')
+                                    extracted_number = int(data.split(':')[1].strip())
+                                    print(f"Received Sequence ID from the server: {data}")
+                                    self.db_handler.update_sequence_number(extracted_number)
+                                    self.db_handler.update_to_ack(extracted_number)
+                                except UnicodeDecodeError:
+                                    print("Failed to decode received message")
+                        except pynng.exceptions.TryAgain:
+                            continue
+            except pynng.NNGException as e:
                 print(f"Error occurred while receiving data from the server: {e}")
-
             if self.shutdown:
                 break
+
 
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
@@ -194,14 +190,11 @@ class EdgeServer:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
             self.connection_check_thread = Thread(target=self.connection_thread)
-            #self.unsent_data_thread = Thread(target=self._send_unsent_data)
-            #self._receive_from_server_thread = Thread(target=self._receive_from_server)
-            self.db_handler.truncate_table("power_averages")
+            self.receive_server_acks = Thread(target=self._receive_from_server)
             self.consumer_thread.start()
             self.producer_thread.start()
             self.connection_check_thread.start()
-            #self.unsent_data_thread.start()
-            #self._receive_from_server_thread.start()
+            self.receive_server_acks.start()
             self.ready = True
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
@@ -212,16 +205,11 @@ class EdgeServer:
         self.shutdown = True
         self.consumer_thread.join()
         self.connection_check_thread.join()
-        #self.unsent_data_thread.join()
-        #self._receive_from_server_thread.join()
-        #self.producer_thread_stop_requested = True  # Request producer thread termination
-        self.producer_thread.join(timeout=1)  # Wait for the producer thread to terminate gracefully
-
+        self.producer_thread.join()
         self.consumer.close()
         self.producer.close()
-        #self.connection_check_thread.close()
+        self.connection_check_thread.close()
         self.ready = False
-        time.sleep(10)  # to check db entries :)
         self.db_handler.truncate_table("power_averages")
         self.db_handler.close_connection()
         
@@ -229,7 +217,6 @@ if __name__ == '__main__':
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'
     output_topic = 'output_topic'
-    cloud_node_address = 'tcp://localhost:37329'
     db_handler = dbHandler('local.db')
-    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler, cloud_node_address)
+    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler)
     edge_server.run()

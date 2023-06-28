@@ -44,6 +44,7 @@ class dbHandler:
                     id INTEGER PRIMARY KEY,
                     node_id TEXT NOT NULL,
                     average REAL NOT NULL,
+                    sequence_number INTEGER DEFAULT 0,
                     timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
                     sent INTEGER DEFAULT 0
                     );
@@ -53,7 +54,6 @@ class dbHandler:
         except Error as e:
             logging.error(f"Error while creating schema: {e}")
             
-    
     def insert_power_average(self, node_id: str, average: float) -> int:
         """Add a new average to the created schema
 
@@ -69,8 +69,8 @@ class dbHandler:
             cursor = connection.cursor()
             #timestamp = datetime.now(pytz.timezone('Europe/Stockholm')).strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute('''
-                    INSERT INTO power_averages(id, node_id, average)
-                VALUES (NULL, ?, ?);
+                    INSERT INTO power_averages(id, node_id, average, sequence_number, sent)
+                VALUES (NULL, ?, ?,0,0);
             ''', (node_id, average))
             connection.commit()
             #self.close_connection()
@@ -80,7 +80,7 @@ class dbHandler:
             logging.error(f"Error while inserting power average: {e}")
 
 
-    def update_power_average(self, id: int):
+    def update_sent_flag(self, id: int):
         """Update db table when data is sent successfully
         Args:
             id (int): id of row to update (sent = 1
@@ -98,6 +98,25 @@ class dbHandler:
         except Error as e:
             logging.error(f"Error while updating power average: {e}")
             
+    def update_to_ack(self, id: int):
+        """Update db table when data is acknowledged
+        Args:
+            id (int): id of row to update (sent = 2)
+        """
+        connection = self.get_connection()
+        try:
+            cursor = connection.cursor()
+            # Here, "sent" is updated to 2, meaning the data has been sent and acknowledged
+            cursor.execute('''
+                    UPDATE power_averages
+                    SET sent = 2
+                    WHERE id = ?;
+                ''', (id,))
+            connection.commit()
+            logging.info(f"Updated power average with id {id} as acknowledged.")
+        except Error as e:
+            logging.error(f"Error while updating power average as acknowledged: {e}") 
+                   
     def get_unsent_power_averages(self):
         """Fetch rows that have not been sent.
         Returns:
@@ -114,6 +133,43 @@ class dbHandler:
         except Error as e:
             logging.error(f"Error while fetching unsent power averages: {e}")
             return []
+    
+    def get_unacknowledged_power_averages(self):
+        """Fetch rows that have not been acknowledged.
+        Returns:
+            List: list of tuples with unacknowledged power averages
+        """
+        connection = self.get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute('''
+                    SELECT id, node_id, average, timestamp FROM power_averages
+                    WHERE sent = 1;
+                ''')
+            return cursor.fetchall()
+        except Error as e:
+            logging.error(f"Error while fetching unacknowledged power averages: {e}")
+            return []
+    
+    def update_sequence_number(self, id: int):
+        """Update the sequence_number attribute of a power average row.
+
+        Args:
+            id (int): The id of the power average row to update.
+            sequence_number (int): The new sequence number value.
+        """
+        connection = self.get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute('''
+                UPDATE power_averages
+                SET sequence_number = ?
+                WHERE id = ?;
+            ''', (id, id))
+            connection.commit()
+            logging.info(f"Updated sequence number for power average with id {id} successfully.")
+        except Error as e:
+            logging.error(f"Error while updating sequence number for power average: {e}")
                     
     def truncate_table(self, table_name: str):
         """Truncates a table in the database.

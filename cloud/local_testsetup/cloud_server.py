@@ -1,13 +1,16 @@
 import json
-import redis
 import logging
-from typing import Any
 import pynng
 import asyncio
+import redis
 
 logging.basicConfig(level=logging.INFO)
+
+# Assign the redis cache:
+cache = redis.Redis(import redis
+
 # Connect to Redis
-r = redis.Redis(host='redis', port=6379, db=0)
+r = redis.Redis(host='redis', port=6379)
 
 async def receive_heartbeat():
     with pynng.Pair0() as heartbeat_socket:
@@ -16,41 +19,45 @@ async def receive_heartbeat():
             message = await heartbeat_socket.arecv()
             if message == b'heartbeat':
                 print('Received heartbeat message')
+                await heartbeat_socket.asend(b'ack')
+                print('Sent ack message')
+                
+async def receive_data():
+    with pynng.Sub0() as data_socket:
+        data_socket.listen('tcp://localhost:63271')
+        data_socket.subscribe(b'')
+        while True:
+            try:
+                request = await data_socket.arecv()
+                request_data = json.loads(request.decode('utf-8'))
+                id = request_data.get('id', 'Unknown')
+                node_id = request_data.get('node_id', 'Unknown')
+                average = request_data.get('average', 'Unknown')
+                print(f"Received data from edge server - id: {id}, node_id: {node_id}, average: {average}")
+                ack_data(id)
+            except pynng.exceptions.TryAgain:
+                await asyncio.sleep(1)
 
-# def handle_client(server: zmq.Socket) -> None:
-#     """Handle client's requests and responses.
-
-#     Args:
-#         server (zmq.Socket): The server socket instance.
-#     """
-#     while True:
-#         try:
-#             request = server.recv()
-#         except AttributeError:
-#             logging.warning("Server socket closed. Rebinding the server socket.")
-#             server.unbind("tcp://*:37329")
-#             server.bind("tcp://*:37329")
-#             continue
-
-#         if request == b'ping':
-#             server.send(b'pong')
-#             continue
-#         try:
-#             data = json.loads(request.decode())
-#             node_id = data.get('node_id', 'Unknown')
-#             average = data.get('average', 'Unknown')
-#             logging.info(f"Received data from node_id: {node_id}")
-#             logging.info(f"Average value: {average}")
-
-#             # Cache the received data
-#             r.hset('node_data', node_id, json.dumps(data))
-#             response = "Received data successfully"
-#             server.send(response.encode())
-#         except json.JSONDecodeError:
-#             logging.ecrror("Failed to decode JSON message")
+def ack_data(id):
+    with pynng.Pub0() as ack_socket:
+        try:
+            ack_socket.dial('tcp://localhost:63272')
+            sequence_number = f"Acknowledgement for receiv id: {id}".encode('utf-8')
+            ack_socket.send(sequence_number)
+            print(f"Sent acknowledgement for id: {id}")
+        except pynng.exceptions.TryAgain:
+            print("Connection not available yet")
+            
+def cache_data(id, node_average):
+    
 
 async def main():
-    await receive_heartbeat()
-    print(f'Server is running')
+    receive_task = asyncio.create_task(receive_data())
+    heartbeat_task = asyncio.create_task(receive_heartbeat())
+
+    await asyncio.gather(receive_task, heartbeat_task)
 
 asyncio.run(main())
+
+
+
