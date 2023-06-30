@@ -41,9 +41,8 @@ async def receive_heartbeat():
         while True:
             message = await heartbeat_socket.arecv()
             if message == b'heartbeat':
-                #logging.info('Received heartbeat message')
                 await heartbeat_socket.asend(b'ack')
-                #logging.info('Sent ack message')
+        
 
 async def receive_data():
     """

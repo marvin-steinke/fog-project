@@ -41,12 +41,17 @@ class EdgeServer:
         # db stuff
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.db_handler = db_handler
+        self.db_lock = Lock()
         
         # connection flags
+        self.connection_lock = Lock()
         self.server_socket = None
         self.cloud_connected = False
         self.unsent_data = None
         
+        #sockets
+        self.server_socket = pynng.Pub0()
+        self.server_socket.dial('tcp://localhost:63271')
         
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -80,6 +85,7 @@ class EdgeServer:
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic or fetches unsent and unacknowledged data from the local db and sends it to the cloud node."""
+        self.unsent_data = []
         while not self.shutdown:
             for _ in range(5):
                 if self.shutdown:
@@ -95,53 +101,55 @@ class EdgeServer:
 
                         # Send real-time data to the cloud if connected and insert it into the db
                         id = self.db_handler.insert_power_average(node_id, average)
-
+                        
+                    with self.connection_lock:
                         if self.cloud_connected:
-                            self._send_to_server(id, node_id, average)
+                            if not self._send_to_server(id, node_id, average):
+                                self.unsent_data.append((id, node_id, average, time.time()))
+                                continue
+                            # Send unsent and unacknowledged data to the cloud if the connection is reestablished
+                            if self.unsent_data:
+                                for data in list(self.unsent_data):  # Make a copy of the list to avoid issues with modifying it during iteration
+                                    id, node_id, average, _ = data
+                                    if not self._send_to_server(id, node_id, average):
+                                        continue
+                                    logging.info(f"Sent unsent data with id {id} to the cloud node.")
+                                    self.unsent_data.remove(data)
+                            self.unsent_data = []
+                        else:
+                            # Fetch unsent and unacknowledged data if the list is empty
+                            temp_unsent_data = self.db_handler.fetch_lost_data()
+                            if temp_unsent_data:
+                                for data in temp_unsent_data:
+                                    if data not in self.unsent_data:
+                                        self.unsent_data.append(data)
+                            logging.error("UNSENT DATA: " + str(self.unsent_data))
+                    values.clear()
 
-                        values.clear()
-
-                # Fetch unsent and unacknowledged data from the local db
-                if not self.cloud_connected:
-                    self.unsent_data = self.db_handler.fetch_lost_data()
-                    logging.error("UNSENT DATA: " + str(self.unsent_data))
-
-                # Send unsent data to the cloud if the connection is reestablished
-                if self.cloud_connected and self.unsent_data:
-                    for data in list(self.unsent_data):  # Make a copy of the list to avoid issues with modifying it during iteration
-                        id, node_id, average, _ = data
-                        if self._send_to_server(id, node_id, average):
-                            logging.info(f"Sent unsent data with id {id} to the cloud node.")
-                            self.unsent_data.remove(data)
-                    self.cloud_connected = True
-
-                            
-
+                        
 
     def connection_thread(self) -> None:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
-        self.cloud_connected = True
-        while not self.shutdown:
-            with pynng.Pair0() as socket:
+        with pynng.Pair0() as socket:
+            socket.dial('tcp://localhost:63270')
+
+            while not self.shutdown:
                 try:
-                    socket.dial('tcp://localhost:63270')
                     socket.send(b'heartbeat')
                     response = socket.recv()
-                    if response != b'ack':
+                    with self.connection_lock:
+                        if response != b'ack':
+                            print("No ack received")
+                            self.cloud_connected = False
+                        else:
+                            self.cloud_connected = True
+                except (pynng.exceptions.ConnectionRefused, ValueError, Exception) as e:
+                    with self.connection_lock:
                         self.cloud_connected = False
-                        raise ValueError("Unexpected response")
-                    #self.cloud_connected = True
-                    #logging.info("Successfully connected to the server.")
-                       
-                except pynng.exceptions.ConnectionRefused:
-                    self.cloud_connected = False
-                    logging.error(f"Could not connect to the server")
-                except Exception as e: 
-                    self.cloud_connected = False
-                    #pass
-
+                    logging.error(f"Could not connect to the server: {e}")
+        
 
     def _send_to_server(self, id: int, node_id: str, average: float) -> bool:
         """Send the computed average values to the cloud server."""
@@ -152,11 +160,6 @@ class EdgeServer:
                 'average': average
             }
             request = json.dumps(request_data).encode('utf-8')
-
-            
-            self.server_socket = pynng.Pub0()
-            self.server_socket.dial('tcp://localhost:63271')
-
             self.server_socket.send(request)
             logging.info("Sent data to the server.")
             self.db_handler.update_sent_flag(id)
@@ -167,6 +170,12 @@ class EdgeServer:
 
 
     def _receive_from_server(self) -> bool:
+        """
+        Continuously receives data from the server.
+
+        Returns:
+            bool: True if the data was successfully received, False otherwise.
+        """
         while not self.shutdown:
             if not self.cloud_connected:
                 time.sleep(1)
@@ -183,8 +192,9 @@ class EdgeServer:
                                     data = message.decode('utf-8')
                                     extracted_number = int(data.split(':')[1].strip())
                                     print(f"Received Sequence ID from the server: {data}")
-                                    self.db_handler.update_sequence_number(extracted_number)
-                                    self.db_handler.update_to_ack(extracted_number)
+                                    with self.db_lock:
+                                        self.db_handler.update_sequence_number(extracted_number)
+                                        self.db_handler.update_to_ack(extracted_number)
                                 except UnicodeDecodeError:
                                     print("Failed to decode received message")
                         except pynng.exceptions.TryAgain:
@@ -214,23 +224,29 @@ class EdgeServer:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
     def stop(self) -> None:
-        """Stops the consumer and producer threads, and sets the ready
-        attribute to False."""
+        """Stops the consumer and producer threads, and sets the ready attribute to False."""
         self.shutdown = True
         try:
-            self.consumer_thread.join()
-            self.connection_check_thread.join()
-            self.producer_thread.join()
+            if self.consumer_thread.is_alive():
+                self.consumer_thread.join()
+            if self.producer_thread.is_alive():
+                self.producer_thread.join()
+            if self.connection_check_thread.is_alive():
+                self.connection_check_thread.join()
+            if self.receive_server_acks.is_alive():
+                self.receive_server_acks.join()
+
             self.consumer.close()
             self.producer.close()
+
+            if self.server_socket:
+                self.server_socket.close()
         except KeyboardInterrupt:
             pass
         finally:
             self.ready = False
-            #self.db_handler.truncate_table("power_averages")
             self.db_handler.close_connection()
 
-        
 if __name__ == '__main__':
     
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

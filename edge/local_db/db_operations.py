@@ -94,9 +94,9 @@ class dbHandler:
                     WHERE id = ?;
                 ''', (id,))
             connection.commit()
-            logging.info(f"Updated power average with id {id} successfully.")
+            logging.info(f"Updated id {id} as SENT.")
         except Error as e:
-            logging.error(f"Error while updating power average: {e}")
+            logging.error(f"Error while updating SENT flag: {e}")
             
     def update_to_ack(self, id: int):
         """Update db table when data is acknowledged
@@ -113,7 +113,7 @@ class dbHandler:
                     WHERE id = ?;
                 ''', (id,))
             connection.commit()
-            logging.info(f"Updated power average with id {id} as acknowledged.")
+            logging.info(f"Updated id {id} as ACK.")
         except Error as e:
             logging.error(f"Error while updating power average as acknowledged: {e}") 
            
