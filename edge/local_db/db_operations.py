@@ -116,40 +116,26 @@ class dbHandler:
             logging.info(f"Updated power average with id {id} as acknowledged.")
         except Error as e:
             logging.error(f"Error while updating power average as acknowledged: {e}") 
+           
                    
-    def get_unsent_power_averages(self):
-        """Fetch rows that have not been sent.
+    def fetch_lost_data(self):
+        """Fetch rows that have not been sent or acknowledged.
+
         Returns:
-            List: list of tuples with unsent power averages
-        """
-        connection = self.get_connection()  
-        try:
-            cursor = connection.cursor()
-            cursor.execute('''
-                    SELECT id, node_id, average, timestamp FROM power_averages
-                    WHERE sent = 0;
-                ''')
-            return cursor.fetchall()
-        except Error as e:
-            logging.error(f"Error while fetching unsent power averages: {e}")
-            return []
-    
-    def get_unacknowledged_power_averages(self):
-        """Fetch rows that have not been acknowledged.
-        Returns:
-            List: list of tuples with unacknowledged power averages
+            List: List of tuples with unsent and unacknowledged power averages.
         """
         connection = self.get_connection()
         try:
             cursor = connection.cursor()
             cursor.execute('''
-                    SELECT id, node_id, average, timestamp FROM power_averages
-                    WHERE sent = 1;
-                ''')
+                SELECT id, node_id, average, timestamp FROM power_averages
+                WHERE sent = 0 OR sent = 1;
+            ''')
             return cursor.fetchall()
         except Error as e:
-            logging.error(f"Error while fetching unacknowledged power averages: {e}")
+            logging.error(f"Error while fetching unsent and unacknowledged power averages: {e}")
             return []
+
     
     def update_sequence_number(self, id: int):
         """Update the sequence_number attribute of a power average row.

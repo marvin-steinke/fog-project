@@ -23,12 +23,13 @@ def establish_cache_connection():
     try:
         cache = redis.Redis(host=cache_host, port=redis_port, db=redis_db)
         logging.info("Connected to Redis cache server.")
+        logging.info(f"Ready to accept Connections.")
         return cache
     except redis.RedisError as e:
         logging.error(f"Error connecting to Redis cache server: {e}")
         raise
 
-# Establish connection to Redis cache server
+# connect to cache 
 cache = establish_cache_connection()
 
 async def receive_heartbeat():
@@ -40,9 +41,9 @@ async def receive_heartbeat():
         while True:
             message = await heartbeat_socket.arecv()
             if message == b'heartbeat':
-                logging.info('Received heartbeat message')
+                #logging.info('Received heartbeat message')
                 await heartbeat_socket.asend(b'ack')
-                logging.info('Sent ack message')
+                #logging.info('Sent ack message')
 
 async def receive_data():
     """
@@ -80,8 +81,7 @@ def ack_data(id):
             ack_socket.dial('tcp://localhost:63272')
             sequence_number = f"Acknowledgement for receive id: {id}".encode('utf-8')
             ack_socket.send(sequence_number)
-            logging.info(f"Sent acknowledgement for id: {id}")
-            #cache.hset(id, 'acknowledged', int(True))  
+            logging.info(f"Sent acknowledgement for id: {id}") 
         except pynng.exceptions.TryAgain:
             logging.error("Connection not available yet")
         except Exception as e:
@@ -96,8 +96,7 @@ def cache_data(id, node_average):
         node_average (float): Average value associated with the received data.
     """
     try:
-        cache.set(id, node_average)
-        #cache.hset(id, 'acknowledged', int(False))  
+        cache.set(id, node_average)  
         logging.info(f"Cached data - id: {id}, node_average: {node_average}")
     except redis.RedisError as e:
         logging.error(f"Error while caching data: {e}")

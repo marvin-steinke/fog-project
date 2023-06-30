@@ -6,10 +6,11 @@ from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 from local_db.db_operations import dbHandler
 import logging
-import zmq
 import os
 import pynng
 
+# Define the logger
+logger = logging.getLogger()
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
 
@@ -42,11 +43,12 @@ class EdgeServer:
         self.db_handler = db_handler
         
         # connection flags
+        self.server_socket = None
         self.cloud_connected = False
-        # self.sent_successfully = False
-        # self.acknowledged_successfully = False
+        self.unsent_data = None
         
-        # simulation environment
+        
+        # sensor simulation
         self.consumer = KafkaConsumer(
             input_topic,
             bootstrap_servers=bootstrap_servers,
@@ -77,97 +79,94 @@ class EdgeServer:
 
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
-        to the output Kafka topic."""
+        to the output Kafka topic or fetches unsent and unacknowledged data from the local db and sends it to the cloud node."""
         while not self.shutdown:
             for _ in range(5):
                 if self.shutdown:
                     return
                 time.sleep(1)
+                
             with self.lock:
                 for node_id, values in self.data.items():
                     if values:
                         average = sum(values) / len(values)
-                        print(average)
                         print("Node ID:", node_id)
                         print("Average Power:", average)
 
+                        # Send real-time data to the cloud if connected and insert it into the db
                         id = self.db_handler.insert_power_average(node_id, average)
-                        #send to cloud if connected and insert in db
+
                         if self.cloud_connected:
-                             self._send_to_server(id, node_id, average)
+                            self._send_to_server(id, node_id, average)
 
                         values.clear()
+
+                # Fetch unsent and unacknowledged data from the local db
+                if not self.cloud_connected:
+                    self.unsent_data = self.db_handler.fetch_lost_data()
+                    logging.error("UNSENT DATA: " + str(self.unsent_data))
+
+                # Send unsent data to the cloud if the connection is reestablished
+                if self.cloud_connected and self.unsent_data:
+                    for data in list(self.unsent_data):  # Make a copy of the list to avoid issues with modifying it during iteration
+                        id, node_id, average, _ = data
+                        if self._send_to_server(id, node_id, average):
+                            logging.info(f"Sent unsent data with id {id} to the cloud node.")
+                            self.unsent_data.remove(data)
+                    self.cloud_connected = True
+
+                            
 
 
     def connection_thread(self) -> None:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
-        prev_connection_status = False
-        while not self.shutdown and not self.cloud_connected:
-            try:
-                with pynng.Pair0() as socket:
+        self.cloud_connected = True
+        while not self.shutdown:
+            with pynng.Pair0() as socket:
+                try:
                     socket.dial('tcp://localhost:63270')
                     socket.send(b'heartbeat')
                     response = socket.recv()
                     if response != b'ack':
+                        self.cloud_connected = False
                         raise ValueError("Unexpected response")
-                    self.cloud_connected = True
-                    print("Successfully connected to the server.")
-            except (pynng.exceptions.Timeout, ValueError) as e:
-                self.cloud_connected = False
-                print(f"Failed to connect to the server. Error: {e}. Retrying in 2 seconds...")
-                time.sleep(2)
-            else:
-                if not prev_connection_status:
-                    # If the connection was restored, send unsent data
-                    self._send_unsent_data()
-                prev_connection_status = True
-        time.sleep(5)
+                    #self.cloud_connected = True
+                    #logging.info("Successfully connected to the server.")
+                       
+                except pynng.exceptions.ConnectionRefused:
+                    self.cloud_connected = False
+                    logging.error(f"Could not connect to the server")
+                except Exception as e: 
+                    self.cloud_connected = False
+                    #pass
 
 
-    def _send_to_server(self, id: int, node_id: str, average: float) -> None:
+    def _send_to_server(self, id: int, node_id: str, average: float) -> bool:
         """Send the computed average values to the cloud server."""
-        if not self.cloud_connected:
-            return False
         try:
-            socket = pynng.Pub0()
-            socket.dial('tcp://localhost:63271')
-        
             request_data = {
                 'id': id,
                 'node_id': node_id,
                 'average': average
             }
             request = json.dumps(request_data).encode('utf-8')
-            socket.send(request)
-            print("Sent data to the server.")
+
+            
+            self.server_socket = pynng.Pub0()
+            self.server_socket.dial('tcp://localhost:63271')
+
+            self.server_socket.send(request)
+            logging.info("Sent data to the server.")
             self.db_handler.update_sent_flag(id)
-            socket.close()
             return True
         except pynng.NNGException as e:
-            print(f"Error occurred while sending data to the server: {e}")
+            logging.error(f"Error occurred while sending data to the server: {e}")
             return False
-    
-    
-    def _send_unsent_data(self) -> None:
-        """Fetches unsent data from the local db, sends it to the cloud, and updates the status flag in the row."""
-        while not self.shutdown:
-            unsent_data = self.db_handler.get_unsent_power_averages()
-            unacknowledged_data = self.db_handler.get_unacknowledged_power_averages()
-            for row in unsent_data and unacknowledged_data:
-                id, node_id, average, timestamp = row
-                data = {"node_id": node_id, "average_power": average}
-                sent_successfully = self._send_to_server(id, node_id, average)
-                ack_successfull = self.receive_server_acks()
-                # if sent_successfully and acknowledged_suss:
-                #     self.db_handler.update_sent_flag(id)
-                # else:
-                    #self.logger.error(f"Failed to send unsent data with id {id} to the cloud node.")
-            time.sleep(3)
 
 
-    def _receive_from_server(self) -> None:
+    def _receive_from_server(self) -> bool:
         while not self.shutdown:
             if not self.cloud_connected:
                 time.sleep(1)
@@ -199,6 +198,7 @@ class EdgeServer:
     def run(self) -> None:
         """Starts the consumer and producer threads, and sets the ready
         attribute to True."""
+        
         try:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
@@ -209,6 +209,7 @@ class EdgeServer:
             self.connection_check_thread.start()
             self.receive_server_acks.start()
             self.ready = True
+        
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
@@ -216,16 +217,23 @@ class EdgeServer:
         """Stops the consumer and producer threads, and sets the ready
         attribute to False."""
         self.shutdown = True
-        self.consumer_thread.join()
-        self.connection_check_thread.join()
-        self.producer_thread.join()
-        self.consumer.close()
-        self.producer.close()
-        self.ready = False
-        self.db_handler.truncate_table("power_averages")
-        self.db_handler.close_connection()
+        try:
+            self.consumer_thread.join()
+            self.connection_check_thread.join()
+            self.producer_thread.join()
+            self.consumer.close()
+            self.producer.close()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.ready = False
+            #self.db_handler.truncate_table("power_averages")
+            self.db_handler.close_connection()
+
         
 if __name__ == '__main__':
+    
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     bootstrap_servers = 'localhost:9092'
     input_topic = 'input_topic'
     output_topic = 'output_topic'
