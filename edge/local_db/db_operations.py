@@ -44,7 +44,7 @@ class dbHandler:
                     id INTEGER PRIMARY KEY,
                     node_id TEXT NOT NULL,
                     average REAL NOT NULL,
-                    sequence_number INTEGER DEFAULT 0,
+                    postal_code INTEGER DEFAULT 0,
                     timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
                     sent INTEGER DEFAULT 0
                     );
@@ -69,7 +69,7 @@ class dbHandler:
             cursor = connection.cursor()
             #timestamp = datetime.now(pytz.timezone('Europe/Stockholm')).strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute('''
-                    INSERT INTO power_averages(id, node_id, average, sequence_number, sent)
+                    INSERT INTO power_averages(id, node_id, average, postal_code, sent)
                 VALUES (NULL, ?, ?,0,0);
             ''', (node_id, average))
             connection.commit()
@@ -137,25 +137,25 @@ class dbHandler:
             return []
 
     
-    def update_sequence_number(self, id: int):
-        """Update the sequence_number attribute of a power average row.
+    def update_postal_code(self, id: int):
+        """Update the postal_code attribute of a power average row.
 
         Args:
             id (int): The id of the power average row to update.
-            sequence_number (int): The new sequence number value.
+            postal_code (int): The new postal_code number value.
         """
         connection = self.get_connection()
         try:
             cursor = connection.cursor()
             cursor.execute('''
                 UPDATE power_averages
-                SET sequence_number = ?
+                SET postal_code = ?
                 WHERE id = ?;
             ''', (id, id))
             connection.commit()
-            logging.info(f"Updated sequence number for power average with id {id} successfully.")
+            logging.info(f"Updated postal_code number for power average with id {id} successfully.")
         except Error as e:
-            logging.error(f"Error while updating sequence number for power average: {e}")
+            logging.error(f"Error while updating postal_code number for power average: {e}")
                     
     def truncate_table(self, table_name: str):
         """Truncates a table in the database.

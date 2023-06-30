@@ -3,6 +3,8 @@ import logging
 import pynng
 import asyncio
 import redis
+import time
+import random
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,21 +35,28 @@ def establish_cache_connection():
 cache = establish_cache_connection()
 
 async def receive_heartbeat():
-    """
-    Receives heartbeat messages from edge servers.
-    """
     with pynng.Pair0() as heartbeat_socket:
         heartbeat_socket.listen('tcp://localhost:63270')
+        last_heartbeat_time = time.time()
+
         while True:
-            message = await heartbeat_socket.arecv()
-            if message == b'heartbeat':
-                await heartbeat_socket.asend(b'ack')
-        
+            try:
+                message = await asyncio.wait_for(heartbeat_socket.arecv(), timeout=5)
+                if message == b'heartbeat':
+                    last_heartbeat_time = time.time()
+                    await heartbeat_socket.asend(b'ack')
+                else:
+                    logging.error("Received an invalid message from the edge server")
+            except asyncio.TimeoutError:
+                current_time = time.time()
+                if current_time - last_heartbeat_time > 5:
+                    logging.error("No connection: Heartbeat not received")
+            except Exception as e:
+                logging.error(f"Error while receiving heartbeat: {e}")
+
+
 
 async def receive_data():
-    """
-    Receives data from edge servers.
-    """
     with pynng.Sub0() as data_socket:
         data_socket.listen('tcp://localhost:63271')
         data_socket.subscribe(b'')
@@ -59,8 +68,8 @@ async def receive_data():
                 node_id = request_data.get('node_id', 'Unknown')
                 average = request_data.get('average', 'Unknown')
                 logging.info(f"Received data from edge server - id: {id}, node_id: {node_id}, average: {average}")
-                ack_data(id)
-                cache_data(id, average)
+                await ack_data(id)
+                await cache_data(id, average)
             except pynng.exceptions.TryAgain:
                 await asyncio.sleep(1)
             except json.JSONDecodeError as e:
@@ -68,44 +77,31 @@ async def receive_data():
             except Exception as e:
                 logging.error(f"Error while receiving data: {e}")
 
-def ack_data(id):
-    """
-    Sends acknowledgement for received data to edge servers.
-
-    Args:
-        id (str): ID of the received data.
-    """
+async def ack_data(id):
     with pynng.Pub0() as ack_socket:
         try:
             ack_socket.dial('tcp://localhost:63272')
-            sequence_number = f"Acknowledgement for receive id: {id}".encode('utf-8')
-            ack_socket.send(sequence_number)
-            logging.info(f"Sent acknowledgement for id: {id}") 
+            plz = generate_plz(id)
+            postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
+            await ack_socket.asend(postal_code)
+            logging.info(f"Sent PLZ for id: {id} - PLZ: {plz}")
         except pynng.exceptions.TryAgain:
             logging.error("Connection not available yet")
         except Exception as e:
-            logging.error(f"Error while sending acknowledgement: {e}")
+            logging.error(f"Error while sending postal code back to edge: {e}")
+    
+    def generate_plz(id):
+        random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(4))
+        return f'{id[:3]}{random_numbers}'
 
-def cache_data(id, node_average):
-    """
-    Caches the received data.
-
-    Args:
-        id (str): ID of the received data.
-        node_average (float): Average value associated with the received data.
-    """
+async def cache_data(id, node_average):
     try:
-        cache.set(id, node_average)  
+        await cache.set(id, node_average)  
         logging.info(f"Cached data - id: {id}, node_average: {node_average}")
-    except redis.RedisError as e:
-        logging.error(f"Error while caching data: {e}")
     except Exception as e:
         logging.error(f"Error while caching data: {e}")
 
 async def main():
-    """
-    Main function to run the server.
-    """
     receive_task = asyncio.create_task(receive_data())
     heartbeat_task = asyncio.create_task(receive_heartbeat())
 

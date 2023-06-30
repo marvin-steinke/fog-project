@@ -132,23 +132,29 @@ class EdgeServer:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
-        with pynng.Pair0() as socket:
-            socket.dial('tcp://localhost:63270')
+        with pynng.Pair0() as heartbeat_socket:
+            heartbeat_socket.dial('tcp://localhost:63270')
 
             while not self.shutdown:
                 try:
-                    socket.send(b'heartbeat')
-                    response = socket.recv()
-                    with self.connection_lock:
-                        if response != b'ack':
-                            print("No ack received")
+                    heartbeat_socket.send(b'heartbeat')
+                    if heartbeat_socket.poll(time=1000) > 0:
+                        response = heartbeat_socket.recv()
+                        with self.connection_lock:
+                            if response != b'ack':
+                                print("No ack received")
+                                self.cloud_connected = False
+                            else:
+                                self.cloud_connected = True
+                    else:
+                        with self.connection_lock:
                             self.cloud_connected = False
-                        else:
-                            self.cloud_connected = True
-                except (pynng.exceptions.ConnectionRefused, ValueError, Exception) as e:
+                        logging.error("Connection lost with the server.")
+                except Exception as e:
                     with self.connection_lock:
                         self.cloud_connected = False
                     logging.error(f"Could not connect to the server: {e}")
+
         
 
     def _send_to_server(self, id: int, node_id: str, average: float) -> bool:
@@ -191,9 +197,9 @@ class EdgeServer:
                                 try:
                                     data = message.decode('utf-8')
                                     extracted_number = int(data.split(':')[1].strip())
-                                    print(f"Received Sequence ID from the server: {data}")
+                                    print(f"Received Post Code from the server: {data}")
                                     with self.db_lock:
-                                        self.db_handler.update_sequence_number(extracted_number)
+                                        self.db_handler.update_postal_code(extracted_number)
                                         self.db_handler.update_to_ack(extracted_number)
                                 except UnicodeDecodeError:
                                     print("Failed to decode received message")
