@@ -1,0 +1,42 @@
+/* main.css */
+
+/* Body styles */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f7f7f7;
+    color: #333;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Header styles */
+  h1 {
+    font-size: 24px;
+    text-align: center;
+    padding: 20px 0;
+  }
+  
+  /* Data container styles */
+  #chartContainer {
+    width: 300px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Animation styles */
+  @keyframes fadeAnimation {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  
+  .fade-in {
+    animation: fadeAnimation 0.5s ease-in-out;
+  }
+  
