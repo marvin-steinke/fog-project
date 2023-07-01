@@ -1,5 +1,6 @@
 import json
 import time
+import threading
 from threading import Lock, Thread
 from typing import Dict
 from collections import defaultdict
@@ -44,10 +45,9 @@ class EdgeServer:
         self.db_lock = Lock()
         
         # connection flags
-        self.connection_lock = Lock()
         self.server_socket = None
         self.cloud_connected = False
-        self.unsent_data = None
+        self.cloud_connected_condition = threading.Condition()
         
         #sockets
         self.server_socket = pynng.Pub0()
@@ -85,7 +85,6 @@ class EdgeServer:
     def _producer_thread(self) -> None:
         """Periodically calculates averages of the power values and sends them
         to the output Kafka topic or fetches unsent and unacknowledged data from the local db and sends it to the cloud node."""
-        self.unsent_data = []
         while not self.shutdown:
             for _ in range(5):
                 if self.shutdown:
@@ -99,138 +98,136 @@ class EdgeServer:
                         print("Node ID:", node_id)
                         print("Average Power:", average)
 
-                        # Send real-time data to the cloud if connected and insert it into the db
+                        #with self.db_lock:
                         id = self.db_handler.insert_power_average(node_id, average)
+    
                         
-                    with self.connection_lock:
-                        if self.cloud_connected:
-                            if not self._send_to_server(id, node_id, average):
-                                self.unsent_data.append((id, node_id, average, time.time()))
-                                continue
-                            # Send unsent and unacknowledged data to the cloud if the connection is reestablished
-                            if self.unsent_data:
-                                for data in list(self.unsent_data):  # Make a copy of the list to avoid issues with modifying it during iteration
-                                    id, node_id, average, _ = data
-                                    if not self._send_to_server(id, node_id, average):
-                                        continue
-                                    logging.info(f"Sent unsent data with id {id} to the cloud node.")
-                                    self.unsent_data.remove(data)
-                            self.unsent_data = []
-                        else:
-                            # Fetch unsent and unacknowledged data if the list is empty
-                            temp_unsent_data = self.db_handler.fetch_lost_data()
-                            if temp_unsent_data:
-                                for data in temp_unsent_data:
-                                    if data not in self.unsent_data:
-                                        self.unsent_data.append(data)
-                            logging.error("UNSENT DATA: " + str(self.unsent_data))
-                    values.clear()
-
-                        
-
-    def connection_thread(self) -> None:
+    def _connection_thread(self) -> None:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
         with pynng.Pair0() as heartbeat_socket:
             heartbeat_socket.dial('tcp://localhost:63270')
+            heartbeat_socket.recv_timeout = 1000  # setting timeout to 1 second
 
             while not self.shutdown:
                 try:
                     heartbeat_socket.send(b'heartbeat')
-                    if heartbeat_socket.poll(time=1000) > 0:
-                        response = heartbeat_socket.recv()
-                        with self.connection_lock:
-                            if response != b'ack':
-                                print("No ack received")
-                                self.cloud_connected = False
-                            else:
-                                self.cloud_connected = True
-                    else:
-                        with self.connection_lock:
-                            self.cloud_connected = False
-                        logging.error("Connection lost with the server.")
+                    response = heartbeat_socket.recv()
+
+                    should_be_connected = response == b'ack'
+                    logging.info(f"Connection status: {should_be_connected}")
+
+                except pynng.exceptions.Timeout:
+                    logging.error("Connection lost with the server.")
+                    should_be_connected = False
                 except Exception as e:
-                    with self.connection_lock:
-                        self.cloud_connected = False
                     logging.error(f"Could not connect to the server: {e}")
+                    should_be_connected = False
 
-        
+                with self.cloud_connected_condition:
+                    print("connection therad entered with condition")
+                    print("cloud connected:", self.cloud_connected)
+                    print("should be connected:", should_be_connected)
+                    if (self.cloud_connected != should_be_connected) or (self.cloud_connected == True):
+                        self.cloud_connected = should_be_connected
+                        self.cloud_connected_condition.notify_all()
+                        
+                time.sleep(3)
 
-    def _send_to_server(self, id: int, node_id: str, average: float) -> bool:
+
+    def _data_sender(self):
         """Send the computed average values to the cloud server."""
-        try:
-            request_data = {
-                'id': id,
-                'node_id': node_id,
-                'average': average
-            }
-            request = json.dumps(request_data).encode('utf-8')
-            self.server_socket.send(request)
-            logging.info("Sent data to the server.")
-            self.db_handler.update_sent_flag(id)
-            return True
-        except pynng.NNGException as e:
-            logging.error(f"Error occurred while sending data to the server: {e}")
-            return False
-
-
-    def _receive_from_server(self) -> bool:
-        """
-        Continuously receives data from the server.
-
-        Returns:
-            bool: True if the data was successfully received, False otherwise.
-        """
         while not self.shutdown:
-            if not self.cloud_connected:
-                time.sleep(1)
-                continue
-            try:
-                with pynng.Sub0() as socket:
-                    socket.listen('tcp://localhost:63272')
-                    socket.subscribe(b'')
-                    while True:
-                        try:
-                            message = socket.recv()
-                            if message:
-                                try:
-                                    data = message.decode('utf-8')
-                                    extracted_number = int(data.split(':')[1].strip())
-                                    print(f"Received Post Code from the server: {data}")
-                                    with self.db_lock:
-                                        self.db_handler.update_postal_code(extracted_number)
-                                        self.db_handler.update_to_ack(extracted_number)
-                                except UnicodeDecodeError:
-                                    print("Failed to decode received message")
-                        except pynng.exceptions.TryAgain:
-                            continue
-            except pynng.NNGException as e:
-                print(f"Error occurred while receiving data from the server: {e}")
-            if self.shutdown:
-                break
+            with self.cloud_connected_condition:
+                #print("entered data sender and with condition")
+                self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
+                #print("woke up from wait")
+                data = self.db_handler.fetch_latest_data()
+                if not data:  # if there's no data to be sent
+                    continue
+                #print("data to be sent:", data) 
+                try:
+                    for entry in data:            
+                        id, node_id, average = entry
+                        request_data = {
+                            'id': id,
+                            'node_id': node_id,
+                            'average': average
+                        }
+                        request = json.dumps(request_data).encode('utf-8')
+                        self.server_socket.send(request)
+                        #logging.info("Sent data to the server.")
+                        #with self.db_lock:
+                        self.db_handler.update_sent_flag(id)
+                except pynng.NNGException as e:
+                    logging.error(f"Error occurred while sending data to the server: {e}")
+                    
+
+
+    # def _receive_from_server(self) -> bool:
+    #     """
+    #     Continuously receives data from the server.
+
+    #     Returns:
+    #         bool: True if the data was successfully received, False otherwise.
+    #     """
+    #     while not self.shutdown:
+    #         if not self.cloud_connected:
+    #             time.sleep(1)
+    #             continue
+    #         try:
+    #             with pynng.Sub0() as socket:
+    #                 socket.listen('tcp://localhost:63272')
+    #                 socket.subscribe(b'')
+    #                 while True:
+    #                     try:
+    #                         message = socket.recv()
+    #                         if message:
+    #                             try:
+    #                                 #TODO: extract ID and postal code from message and call db method
+    #                                 data = message.decode('utf-8')
+    #                                 extracted_number = int(data.split(':')[1].strip())
+    #                                 print(f"Received Post Code from the server: {data}")
+    #                                 with self.db_lock:
+    #                                     self.db_handler.update_postal_code(extracted_number)
+    #                                     self.db_handler.update_to_ack(extracted_number)
+    #                             except UnicodeDecodeError:
+    #                                 print("Failed to decode received message")
+    #                     except pynng.exceptions.TryAgain:
+    #                         continue
+    #         except pynng.NNGException as e:
+    #             print(f"Error occurred while receiving data from the server: {e}")
+    #         if self.shutdown:
+    #             break
 
 
     def run(self) -> None:
-        """Starts the consumer and producer threads, and sets the ready
-        attribute to True."""
+        """Starts the consumer, producer, connection_check and data_send threads,
+        and sets the ready attribute to True."""
         
         try:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
-            self.connection_check_thread = Thread(target=self.connection_thread)
-            self.receive_server_acks = Thread(target=self._receive_from_server)
+            self.connection_check_thread = Thread(target=self._connection_thread)
+            self.data_send_thread = Thread(target=self._data_sender)
+            #self.receive_plz = Thread(target=self._receive_from_server)
+            
+            self.connection_check_thread.start()
+            time.sleep(5)
             self.consumer_thread.start()
             self.producer_thread.start()
-            self.connection_check_thread.start()
-            self.receive_server_acks.start()
+            
+            self.data_send_thread.start()
+            #self.receive_plz.start()
             self.ready = True
         
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
     def stop(self) -> None:
-        """Stops the consumer and producer threads, and sets the ready attribute to False."""
+        """Stops the consumer, producer, connection_check, and data_send threads, 
+        and sets the ready attribute to False."""
         self.shutdown = True
         try:
             if self.consumer_thread.is_alive():
@@ -239,8 +236,10 @@ class EdgeServer:
                 self.producer_thread.join()
             if self.connection_check_thread.is_alive():
                 self.connection_check_thread.join()
-            if self.receive_server_acks.is_alive():
-                self.receive_server_acks.join()
+            if self.data_send_thread.is_alive():
+                self.data_send_thread.join()
+            #if self.receive_plz.is_alive():
+            #    self.receive_plz.join()
 
             self.consumer.close()
             self.producer.close()
@@ -252,13 +251,3 @@ class EdgeServer:
         finally:
             self.ready = False
             self.db_handler.close_connection()
-
-if __name__ == '__main__':
-    
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    bootstrap_servers = 'localhost:9092'
-    input_topic = 'input_topic'
-    output_topic = 'output_topic'
-    db_handler = dbHandler('local.db')
-    edge_server = EdgeServer(bootstrap_servers, input_topic, output_topic, db_handler)
-    edge_server.run()

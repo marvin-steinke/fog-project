@@ -74,7 +74,7 @@ class dbHandler:
             ''', (node_id, average))
             connection.commit()
             #self.close_connection()
-            logging.info(f"Inserted power average for node_id {node_id} successfully.")
+            logging.info(f"Inserted {average} successfully.")
             return cursor.lastrowid
         except Error as e:
             logging.error(f"Error while inserting power average: {e}")
@@ -94,7 +94,7 @@ class dbHandler:
                     WHERE id = ?;
                 ''', (id,))
             connection.commit()
-            logging.info(f"Updated id {id} as SENT.")
+            #logging.info(f"Updated id {id} as SENT.")
         except Error as e:
             logging.error(f"Error while updating SENT flag: {e}")
             
@@ -116,8 +116,27 @@ class dbHandler:
             logging.info(f"Updated id {id} as ACK.")
         except Error as e:
             logging.error(f"Error while updating power average as acknowledged: {e}") 
-           
-                   
+        
+            
+    def fetch_latest_data(self):
+        """Fetch all unsent power averages.
+
+        Returns:
+            List: List of unsent power averages or an empty list if all rows have been sent.
+        """
+        connection = self.get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute('''
+                SELECT id, node_id, average FROM power_averages
+                WHERE sent = 0 OR sent = 1;
+            ''')
+            return cursor.fetchall()
+        except Error as e:
+            logging.error(f"Error while fetching unsent power averages: {e}")
+            return []
+
+            
     def fetch_lost_data(self):
         """Fetch rows that have not been sent or acknowledged.
 
