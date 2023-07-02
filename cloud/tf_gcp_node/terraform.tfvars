@@ -1,2 +1,2 @@
-credentials_file  = "keys/vessim-1f960bf3beb6.json"
-project           = "vessim"
+credentials_file = "../../keys/fog_cred_gcloud.json"
+project           = "fog-computing"
