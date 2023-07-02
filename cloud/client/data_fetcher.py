@@ -40,7 +40,11 @@ def get_data():
     for key in keys:
         value = cache.get(key)
         city = random.choice(german_cities)
-        data.append({"key": key.decode(), "cityName": city, "powerAverage": float(value.decode())})
+        power_average = float(value.decode())
+        # Calculate price based on power average
+        # Assuming price is 0.30 Euros per kWh
+        cost = power_average * 0.30
+        data.append({"key": key.decode(), "cityName": city, "powerAverage": power_average, "cost": cost})
     return jsonify(data)
 
 if __name__ == '__main__':

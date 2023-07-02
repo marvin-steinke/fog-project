@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$(document).ready(function () {
   var currentIndex = 0; // Track the current index of the fetched data
 
   // Initialize chart
@@ -28,17 +28,21 @@ $(document).ready(function() {
     }
   });
 
+  // Display the cost per city
+  var costDisplay = document.getElementById('costDisplay');
+
   // Function to fetch data from the backend API
   function fetchData() {
     $.ajax({
       url: '/api/data',
       type: 'GET',
       dataType: 'json',
-      success: function(data) {
+      success: function (data) {
         if (data.length > 0) {
-          // Get the city and power average at the current index
+          // Get the city, power average, and cost at the current index
           var city = data[currentIndex].cityName;
           var powerAverage = data[currentIndex].powerAverage;
+          var cost = data[currentIndex].cost;
 
           // Add the city and power average to the chart data
           myChart.data.labels.push(city);
@@ -53,11 +57,15 @@ $(document).ready(function() {
           // Update the chart
           myChart.update();
 
+          // Display the cost for the current city
+          costDisplay.innerText = 'Cost for ' + city + ': €' + cost.toFixed(2);
+          $(costDisplay).hide().fadeIn(2000);  // fade in effect
+
           // Move to the next index
           currentIndex = (currentIndex + 1) % data.length;
         }
       },
-      error: function(error) {
+      error: function (error) {
         console.log('Error fetching data:', error);
       }
     });
@@ -68,4 +76,14 @@ $(document).ready(function() {
 
   // Fetch data every 2 seconds
   setInterval(fetchData, 2000);
+
+  // Click event for the schema image
+  $("#schemaImage").click(function () {
+    $("#enlargedSchemaImage").addClass("show");
+  });
+
+  // Click event to close the enlarged image
+  $("#enlargedSchemaImage").click(function () {
+    $(this).removeClass("show");
+  });
 });

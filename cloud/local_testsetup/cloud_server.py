@@ -5,6 +5,7 @@ import asyncio
 import redis
 import time
 import random
+import subprocess
 
 logging.basicConfig(level=logging.INFO)
 
@@ -96,7 +97,6 @@ async def receive_data():
 #     return f'{id[:3]}{random_numbers}'
 
 
-
 def cache_data(id, node_average):
     try:
         cache.set(id, node_average)  
@@ -106,6 +106,12 @@ def cache_data(id, node_average):
 
 
 async def main():
+    
+    # start flask backend 
+    # data_fetcher_process = subprocess.Popen(["python3", "../data_fetcher.py"], 
+    #                                         stdout=subprocess.PIPE, 
+    #                                         stderr=subprocess.PIPE)
+    
     receive_task = asyncio.create_task(receive_data())
     heartbeat_task = asyncio.create_task(receive_heartbeat())
 
