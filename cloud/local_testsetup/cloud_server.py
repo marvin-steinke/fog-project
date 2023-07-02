@@ -70,7 +70,7 @@ async def receive_data():
                 node_id = request_data.get('node_id', 'Unknown')
                 average = request_data.get('average', 'Unknown')
                 logging.info(f"Received data from edge server - id: {id}, node_id: {node_id}, average: {average}")
-                #await plz_data(id)
+                await plz_data(id)
                 cache_data(id, average)
             except pynng.exceptions.TryAgain:
                 await asyncio.sleep(1)
@@ -79,22 +79,22 @@ async def receive_data():
             except Exception as e:
                 logging.error(f"Error while receiving data: {e}")
 
-# async def plz_data(id):
-#     with pynng.Pub0() as ack_socket:
-#         try:
-#             ack_socket.dial('tcp://localhost:63272')
-#             plz = generate_plz(str(id))
-#             postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
-#             await ack_socket.asend(id, postal_code)
-#             logging.info(f"Sent PLZ for id: {id} - PLZ: {plz}")
-#         except pynng.exceptions.TryAgain:
-#             logging.error("Connection not available yet")
-#         except Exception as e:
-#             logging.error(f"Error while sending postal code back to edge: {e}")
+async def plz_data(id):
+    with pynng.Pub0() as ack_socket:
+        try:
+            ack_socket.dial('tcp://localhost:63272')
+            plz = generate_plz(str(id))
+            postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
+            await ack_socket.asend(postal_code)
+            logging.info(f"Sent PLZ for id: {id} - PLZ: {plz}")
+        except pynng.exceptions.TryAgain:
+            logging.error("Connection not available yet")
+        except Exception as e:
+            logging.error(f"Error while sending postal code back to edge: {e}")
 
-# def generate_plz(id):
-#     random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(4))
-#     return f'{id[:3]}{random_numbers}'
+def generate_plz(id):
+    random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(4))
+    return f'{id[:3]}{random_numbers}'
 
 
 def cache_data(id, node_average):

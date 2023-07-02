@@ -9,6 +9,7 @@ from local_db.db_operations import dbHandler
 import logging
 import os
 import pynng
+import re
 
 # Define the logger
 logger = logging.getLogger()
@@ -165,41 +166,45 @@ class EdgeServer:
                     
 
 
-    # def _receive_from_server(self) -> bool:
-    #     """
-    #     Continuously receives data from the server.
+    def _receive_from_server(self) -> None:
+        """
+        Continuously receives data from the server.
 
-    #     Returns:
-    #         bool: True if the data was successfully received, False otherwise.
-    #     """
-    #     while not self.shutdown:
-    #         if not self.cloud_connected:
-    #             time.sleep(1)
-    #             continue
-    #         try:
-    #             with pynng.Sub0() as socket:
-    #                 socket.listen('tcp://localhost:63272')
-    #                 socket.subscribe(b'')
-    #                 while True:
-    #                     try:
-    #                         message = socket.recv()
-    #                         if message:
-    #                             try:
-    #                                 #TODO: extract ID and postal code from message and call db method
-    #                                 data = message.decode('utf-8')
-    #                                 extracted_number = int(data.split(':')[1].strip())
-    #                                 print(f"Received Post Code from the server: {data}")
-    #                                 with self.db_lock:
-    #                                     self.db_handler.update_postal_code(extracted_number)
-    #                                     self.db_handler.update_to_ack(extracted_number)
-    #                             except UnicodeDecodeError:
-    #                                 print("Failed to decode received message")
-    #                     except pynng.exceptions.TryAgain:
-    #                         continue
-    #         except pynng.NNGException as e:
-    #             print(f"Error occurred while receiving data from the server: {e}")
-    #         if self.shutdown:
-    #             break
+        Returns:
+            None.
+        """
+        while not self.shutdown:
+            if not self.cloud_connected:
+                time.sleep(1)
+                continue
+            try:
+                with pynng.Sub0() as socket:
+                    socket.listen('tcp://localhost:63272')
+                    socket.subscribe(b'')
+                    while True:
+                        try:
+                            message = socket.recv()
+                            if message:
+                                try:
+                                    # Extract ID and postal code from message and call db method
+                                    data = message.decode('utf-8')
+                                    match = re.match(r"PLZ for id: (\d+) - PLZ: (\d+)", data)
+                                    if match:
+                                        id, postal_code = map(int, match.groups())
+                                        print(f"Received Post Code from the server: {data}")
+                                        with self.db_lock:
+                                            self.db_handler.update_postal_code(postal_code)
+                                            self.db_handler.update_to_ack(id)
+                                    else:
+                                        print(f"Failed to parse message: {data}")
+                                except UnicodeDecodeError:
+                                    print("Failed to decode received message")
+                        except pynng.exceptions.TryAgain:
+                            continue
+            except pynng.NNGException as e:
+                print(f"Error occurred while receiving data from the server: {e}")
+            if self.shutdown:
+                break
 
 
     def run(self) -> None:
@@ -211,7 +216,7 @@ class EdgeServer:
             self.producer_thread = Thread(target=self._producer_thread)
             self.connection_check_thread = Thread(target=self._connection_thread)
             self.data_send_thread = Thread(target=self._data_sender)
-            #self.receive_plz = Thread(target=self._receive_from_server)
+            self.receive_plz = Thread(target=self._receive_from_server)
             
             self.connection_check_thread.start()
             time.sleep(5)
@@ -219,7 +224,7 @@ class EdgeServer:
             self.producer_thread.start()
             
             self.data_send_thread.start()
-            #self.receive_plz.start()
+            self.receive_plz.start()
             self.ready = True
         
         except Exception as e:
@@ -238,8 +243,8 @@ class EdgeServer:
                 self.connection_check_thread.join()
             if self.data_send_thread.is_alive():
                 self.data_send_thread.join()
-            #if self.receive_plz.is_alive():
-            #    self.receive_plz.join()
+            if self.receive_plz.is_alive():
+                self.receive_plz.join()
 
             self.consumer.close()
             self.producer.close()
