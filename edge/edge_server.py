@@ -144,12 +144,12 @@ class EdgeServer:
                 #print("entered data sender and with condition")
                 self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
                 #print("woke up from wait")
-                data = self.db_handler.fetch_latest_data()
-                if not data:  # if there's no data to be sent
+                new_data = self.db_handler.fetch_latest_data()
+                if not new_data:  # if there's no data to be sent
                     continue
                 #print("data to be sent:", data) 
                 try:
-                    for entry in data:            
+                    for entry in new_data:            
                         id, node_id, average = entry
                         request_data = {
                             'id': id,
@@ -163,7 +163,22 @@ class EdgeServer:
                         self.db_handler.update_sent_flag(id)
                 except pynng.NNGException as e:
                     logging.error(f"Error occurred while sending data to the server: {e}")
-                    
+            
+                lost_data = self.db_handler.fetch_lost_data()       
+                for entry in lost_data:
+                    id, node_id, average, _ = entry
+                    request_data = {
+                        'id': id,
+                        'node_id': node_id,
+                        'average': average
+                    }
+                    request = json.dumps(request_data).encode('utf-8')
+                    try:
+                        self.server_socket.send(request)
+                        # If the data is sent successfully, mark it as sent in the database
+                        self.db_handler.update_sent_flag(id)
+                    except pynng.NNGException as e:
+                        logging.error(f"Error occurred while sending data to the server: {e}")
 
 
     def _receive_from_server(self) -> None:
@@ -193,7 +208,7 @@ class EdgeServer:
                                         id, postal_code = map(int, match.groups())
                                         print(f"Received Post Code from the server: {data}")
                                         with self.db_lock:
-                                            self.db_handler.update_postal_code(postal_code)
+                                            self.db_handler.update_postal_code(id, postal_code)
                                             self.db_handler.update_to_ack(id)
                                     else:
                                         print(f"Failed to parse message: {data}")

@@ -129,7 +129,7 @@ class dbHandler:
             cursor = connection.cursor()
             cursor.execute('''
                 SELECT id, node_id, average FROM power_averages
-                WHERE sent = 0 OR sent = 1;
+                WHERE sent = 0;
             ''')
             return cursor.fetchall()
         except Error as e:
@@ -156,7 +156,7 @@ class dbHandler:
             return []
 
     
-    def update_postal_code(self, id: int):
+    def update_postal_code(self, id: int, postal_code: int):
         """Update the postal_code attribute of a power average row.
 
         Args:
@@ -170,7 +170,7 @@ class dbHandler:
                 UPDATE power_averages
                 SET postal_code = ?
                 WHERE id = ?;
-            ''', (id, id))
+            ''', (postal_code, id))
             connection.commit()
             logging.info(f"Updated postal_code number for power average with id {id} successfully.")
         except Error as e:
