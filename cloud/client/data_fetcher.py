@@ -10,11 +10,22 @@ redis_db = 0
 cache = None
 
 german_cities = [
-    'Berlin', 'Hamburg', 'München', 'Cologne', 'Frankfurt', 'Stuttgart', 'Düsseldorf', 'Dortmund', 'Essen', 'Leipzig',
-    'Bremen', 'Dresden', 'Hanover', 'Nürnberg', 'Duisburg', 'Bochum', 'Wuppertal', 'Bielefeld', 'Bonn', 'Munster',
-    'Karlsruhe', 'Mannheim', 'Augsburg', 'Wiesbaden', 'Gelsenkirchen', 'Mönchengladbach', 'Braunschweig', 'Chemnitz',
-    'Kiel', 'Aachen', 'Halle', 'Magdeburg', 'Freiburg', 'Krefeld', 'Lubeck', 'Oberhausen', 'Erfurt', 'Mainz',
-    'Rostock', 'Kassel', 'Hagen', 'Hamm', 'Saarbrucken', 'Potsdam', 'Leverkusen', 'Oldenburg', 'Solingen', 'Herne'
+  'Baden-Württemberg',
+  'Bayern',
+  'Berlin',
+  'Brandenburg',
+  'Bremen',
+  'Hamburg',
+  'Hessen',
+  'Niedersachsen',
+  'Mecklemburg-Vorpommern',
+  'Nordrhein-Westphalen',
+  'Rheinland-Pfalz',
+  'Saarland',
+  'Sachsen',
+  'Sachsen-Anhalt',
+  'Schleswig-Holstein',
+  'Thüringen'
 ]
 
 def connect_to_redis():

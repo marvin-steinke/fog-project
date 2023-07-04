@@ -26,65 +26,14 @@ h1 {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
+/* TU Berlin line styles */
 #tuBerlinLine {
   position: relative;
-  margin-top: 20px;
-  /* Adjust the margin-top value as needed */
-  height: 200px;
-  /* Adjust the height value as needed */
+  margin-top: 140px;
+  height: 10px;
   width: 100%;
-  overflow: hidden;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  z-index: 1;
-  /* Add a higher z-index value to keep it above other elements */
-}
-
-#tuBerlinLine img {
-  max-height: 100%;
-  width: 60px;
-  height: auto;
-}
-
-#EClogo {
-  margin-right: 10px;
-  width: 165px;
-  /* Increase the width by 10% */
-}
-
-#Gitlogo {
-  margin-left: 10px;
-  width: 165px;
-  /* Increase the width by 10% */
-}
-
-#TUBlogo {
-  margin-right: 10px;
-  width: 165px;
-  /* Increase the width by 10% */
-}
-
-#tuBerlinLine {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-#tuBerlinLine img {
-  max-height: 100%;
-  height: auto;
-}
-
-#tuBerlinLine .links {
-  margin-left: 10px;
-}
-
-#Gitlogo {
-  margin-left: 10px;
-  width: 150px;
-    /* Adjust the width as needed */
-    height: auto;
 }
 
 #tuBerlinLine::before {
@@ -93,26 +42,50 @@ h1 {
   top: 50%;
   left: 0;
   width: 100%;
-  height: 222px;
-  background: linear-gradient(to right, #1f90cc66, rgba(73, 203, 64, 0.3));
+  height: 150px;
+  background-image: linear-gradient(to right, #1f90cc, rgba(73, 203, 64, 0.3));
   transform: translateY(-50%);
+  z-index: -1;
 }
 
-.logo,
-.links {
-  z-index: 2;
+/* Logo styles */
+.tu-logo,
+.einstein-logo,
+.schema-logo,
+.github {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+  /* Adjust the margin value as desired */
+}
+
+.tu-logo {
+  margin-left: 0;
+  /* Remove the left margin for the first logo */
 }
 
 .logo img {
-  max-height: 100%;
-  width: 150px;
-    /* Adjust the width as needed */
-    height: auto;
+  max-height: 50px;
+  width: auto;
+  height: auto;
+}
+
+.logo img.tu-logo {
+  width: 100px;
+  height: auto;
+}
+
+.logo img.einstein-logo {
+  width: 100px;
+}
+
+.logo img.github-logo {
+  width: 40px;
 }
 
 .links a {
   color: white;
-  margin: 0 10px;
+  margin: 0 5px;
   text-decoration: none;
 }
 
@@ -137,32 +110,38 @@ h1 {
 
 /* Additional styles for the modified layout */
 #costDisplay {
-  text-align: center;
-  font-size: 1.5em;
-  margin-top: 20px;
-  /* Adjust the margin-top value as needed */
-  margin-bottom: 10px;
-  height: 60px;
-  /* Set a specific height for the cost box */
-}
-
-#imageContainer {
-  position: fixed;
-  top: 30px;
-  left: 30px;
-  z-index: 9999;
-  cursor: pointer;
-}
-
-#schemaImage {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: hidden;
   width: 200px;
-  height: auto;
-  opacity: 0.4;
-  transition: opacity 0.3s ease-in-out;
+  /* Adjust the width as desired */
+  height: 40px;
+  /* Adjust the height as desired */
+  margin: 20px auto;
+  /* Adjust the margin as needed */
+  font-size: 0.8em;
+  /* Adjust the font size as needed */
+  font-weight: bold;
+  /* Add bold font weight */
+  align-items: center;
+  /* Center the text vertically */
 }
 
-#schemaImage:hover {
-  opacity: 1;
+.cost-item {
+  padding: 5px;
+  white-space: nowrap;
+  animation: slide 10s linear infinite;
+  /* Adjust the animation duration as needed */
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 #enlargedSchemaImage {
@@ -188,15 +167,6 @@ h1 {
   display: flex;
 }
 
-/* Adjust the size of the pictures */
-#placeholderImage1,
-#placeholderImage2 {
-  width: 150px;
-  /* Adjust the width as needed */
-  height: auto;
-  /* Automatically adjust the height */
-}
-
 @media (max-width: 480px) {
   #chartContainer {
     width: 100%;
@@ -210,15 +180,7 @@ h1 {
     font-size: 1em;
   }
 
-  #tuBerlinLine img {
-    width: 40px;
-  }
-
   .logo img {
-    width: 100px;
-  }
-
-  #schemaImage {
     width: 100px;
   }
 }
