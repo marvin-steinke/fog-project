@@ -109,28 +109,31 @@ class EdgeServer:
         """
         with pynng.Pair0() as heartbeat_socket:
             heartbeat_socket.dial('tcp://localhost:63270')
-            heartbeat_socket.recv_timeout = 1000  # setting timeout to 1 second
+            heartbeat_socket.recv_timeout = 2000  
+
+            initial_log = True  
 
             while not self.shutdown:
                 try:
                     heartbeat_socket.send(b'heartbeat')
                     response = heartbeat_socket.recv()
-
                     should_be_connected = response == b'ack'
-                    logging.info(f"Connection status: {should_be_connected}")
 
-                except pynng.exceptions.Timeout:
+                except pynng.exceptions.ConnectionRefused:
                     logging.error("Connection lost with the server.")
                     should_be_connected = False
-                except Exception as e:
-                    logging.error(f"Could not connect to the server: {e}")
+                except pynng.exceptions.Timeout:
+                    logging.error("Connection timed out.")
                     should_be_connected = False
+                    
+                if should_be_connected:
+                    logging.info("Connection to the server is established.")
+                else:
+                    logging.info("No connection to the server.")
 
                 with self.cloud_connected_condition:
-                    print("connection therad entered with condition")
-                    print("cloud connected:", self.cloud_connected)
-                    print("should be connected:", should_be_connected)
-                    if (self.cloud_connected != should_be_connected) or (self.cloud_connected == True):
+                    if self.cloud_connected != should_be_connected or initial_log:
+                        initial_log = False  # turn off the initial logging
                         self.cloud_connected = should_be_connected
                         self.cloud_connected_condition.notify_all()
                         
@@ -158,9 +161,9 @@ class EdgeServer:
                         }
                         request = json.dumps(request_data).encode('utf-8')
                         self.server_socket.send(request)
-                        #logging.info("Sent data to the server.")
-                        #with self.db_lock:
-                        self.db_handler.update_sent_flag(id)
+                        logging.info(f"Sent data to the server: {id}") 
+                        with self.db_lock:
+                            self.db_handler.update_sent_flag(id)
                 except pynng.NNGException as e:
                     logging.error(f"Error occurred while sending data to the server: {e}")
             
@@ -175,8 +178,9 @@ class EdgeServer:
                     request = json.dumps(request_data).encode('utf-8')
                     try:
                         self.server_socket.send(request)
-                        # If the data is sent successfully, mark it as sent in the database
-                        self.db_handler.update_sent_flag(id)
+                        # If the data is sent successfully, mark it as sent 
+                        with self.db_lock:
+                            self.db_handler.update_sent_flag(id)
                     except pynng.NNGException as e:
                         logging.error(f"Error occurred while sending data to the server: {e}")
 
@@ -201,7 +205,6 @@ class EdgeServer:
                             message = socket.recv()
                             if message:
                                 try:
-                                    # Extract ID and postal code from message and call db method
                                     data = message.decode('utf-8')
                                     match = re.match(r"PLZ for id: (\d+) - PLZ: (\d+)", data)
                                     if match:
@@ -234,7 +237,7 @@ class EdgeServer:
             self.receive_plz = Thread(target=self._receive_from_server)
             
             self.connection_check_thread.start()
-            time.sleep(5)
+            #time.sleep(3)
             self.consumer_thread.start()
             self.producer_thread.start()
             
