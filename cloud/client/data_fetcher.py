@@ -29,31 +29,44 @@ german_cities = [
 ]
 
 def connect_to_redis():
+    """Establishes a connection to the Redis cache server.
+
+    In case of failure, retries every 5 seconds until successful.
+    """
+    global cache
     while True:
         try:
-            global cache
             cache = redis.Redis(host=cache_host, port=redis_port, db=redis_db)
-            break  # Connection successful, break out of the loop
+            break
         except redis.ConnectionError:
             print("Failed to connect to Redis. Retrying in 5 seconds...")
             time.sleep(5)
 
-connect_to_redis()  # Connect to Redis initially
+connect_to_redis()
 
 @app.route('/')
 def index():
+    """Renders the index page.
+
+    Returns:
+        Rendered template for the index page.
+    """
     return render_template('index.html')
 
 @app.route('/api/data')
 def get_data():
+    """Fetches data from the Redis cache, calculates cost based on power average and 
+    sends it as a json object.
+
+    Returns:
+        json: JSON object containing the key, city name, power average, and calculated cost.
+    """
     data = []
     keys = cache.keys()
     for key in keys:
         value = cache.get(key)
         city = random.choice(german_cities)
         power_average = float(value.decode())
-        # Calculate price based on power average
-        # Assuming price is 0.30 Euros per kWh
         cost = power_average * 0.30
         data.append({"key": key.decode(), "cityName": city, "powerAverage": power_average, "cost": cost})
     return jsonify(data)
