@@ -74,7 +74,7 @@ class dbHandler:
             ''', (node_id, average))
             connection.commit()
             #self.close_connection()
-            logging.info(f"Inserted {average} successfully.")
+            #logging.info(f"Inserted {average} successfully.")
             return cursor.lastrowid
         except Error as e:
             logging.error(f"Error while inserting power average: {e}")
@@ -148,7 +148,7 @@ class dbHandler:
             cursor = connection.cursor()
             cursor.execute('''
                 SELECT id, node_id, average, timestamp FROM power_averages
-                WHERE sent = 0 OR sent = 1;
+                WHERE sent = 1;
             ''')
             return cursor.fetchall()
         except Error as e:

@@ -96,93 +96,112 @@ class EdgeServer:
                 for node_id, values in self.data.items():
                     if values:
                         average = sum(values) / len(values)
-                        print("Node ID:", node_id)
-                        print("Average Power:", average)
+                        # print("Node ID:", node_id)
+                        # print("Average Power:", average)
 
-                        #with self.db_lock:
-                        id = self.db_handler.insert_power_average(node_id, average)
-    
-                        
+                        with self.db_lock:
+                            id = self.db_handler.insert_power_average(node_id, average)
+                        print("Power Data queued:", id)
+
     def _connection_thread(self) -> None:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
-        with pynng.Pair0() as heartbeat_socket:
-            heartbeat_socket.dial('tcp://localhost:63270')
-            heartbeat_socket.recv_timeout = 2000  
+        # Create the socket outside the with statement
+        heartbeat_socket = pynng.Pair0()
+        heartbeat_socket.dial('tcp://localhost:63270')  # Use block=False to avoid waiting if the server isn't online
+        heartbeat_socket.recv_timeout = 2000
+        
+        while not self.shutdown:
+            try:
+                heartbeat_socket.send(b'heartbeat')
+                response = heartbeat_socket.recv(block=True)
+                connection_alive = response == b'ack'  # Renamed should_be_connected to connection_alive
 
-            initial_log = True  
+            except pynng.exceptions.ConnectionRefused:
+                logging.error("Connection lost with the server.")
+                connection_alive = False
+            except pynng.exceptions.Timeout:
+                logging.error("Connection timed out.")
+                connection_alive = False
 
-            while not self.shutdown:
-                try:
-                    heartbeat_socket.send(b'heartbeat')
-                    response = heartbeat_socket.recv()
-                    should_be_connected = response == b'ack'
+            with self.cloud_connected_condition:
+                self.cloud_connected = connection_alive
+                self.cloud_connected_condition.notify_all()
 
-                except pynng.exceptions.ConnectionRefused:
-                    logging.error("Connection lost with the server.")
-                    should_be_connected = False
-                except pynng.exceptions.Timeout:
-                    logging.error("Connection timed out.")
-                    should_be_connected = False
-                    
-                if should_be_connected:
-                    logging.info("Connection to the server is established.")
-                else:
-                    logging.info("No connection to the server.")
+            if self.cloud_connected:
+                logging.info("Connection to the server is established.")
+            else:
+                logging.info("No connection to the server. Data transmission is halted.")
 
-                with self.cloud_connected_condition:
-                    if self.cloud_connected != should_be_connected or initial_log:
-                        initial_log = False  # turn off the initial logging
-                        self.cloud_connected = should_be_connected
-                        self.cloud_connected_condition.notify_all()
-                        
-                time.sleep(3)
+            time.sleep(3)
+
+        heartbeat_socket.close()
+
 
 
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
         while not self.shutdown:
             with self.cloud_connected_condition:
-                #print("entered data sender and with condition")
                 self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
-                #print("woke up from wait")
-                new_data = self.db_handler.fetch_latest_data()
-                if not new_data:  # if there's no data to be sent
+
+                if not self.cloud_connected:
                     continue
-                #print("data to be sent:", data) 
-                try:
-                    for entry in new_data:            
-                        id, node_id, average = entry
-                        request_data = {
-                            'id': id,
-                            'node_id': node_id,
-                            'average': average
-                        }
-                        request = json.dumps(request_data).encode('utf-8')
-                        self.server_socket.send(request)
-                        logging.info(f"Sent data to the server: {id}") 
-                        with self.db_lock:
-                            self.db_handler.update_sent_flag(id)
-                except pynng.NNGException as e:
-                    logging.error(f"Error occurred while sending data to the server: {e}")
-            
-                lost_data = self.db_handler.fetch_lost_data()       
-                for entry in lost_data:
-                    id, node_id, average, _ = entry
+
+                latest_data_ids = set()  
+                new_data = self.db_handler.fetch_latest_data()
+                if not new_data:  
+                    continue
+
+                for entry in new_data:            
+                    id, node_id, average = entry
+                    latest_data_ids.add(id)  
+
                     request_data = {
                         'id': id,
                         'node_id': node_id,
                         'average': average
                     }
                     request = json.dumps(request_data).encode('utf-8')
-                    try:
-                        self.server_socket.send(request)
-                        # If the data is sent successfully, mark it as sent 
-                        with self.db_lock:
-                            self.db_handler.update_sent_flag(id)
-                    except pynng.NNGException as e:
-                        logging.error(f"Error occurred while sending data to the server: {e}")
+
+                    with self.cloud_connected_condition:
+                        if not self.cloud_connected:
+                            logging.info("Connection lost. Buffering data for sending.")
+                            break
+                        try:
+                            self.server_socket.send(request)
+                            logging.info(f"Data buffered for sending to the server: {id}") 
+                            with self.db_lock:
+                                self.db_handler.update_sent_flag(id)
+                        except pynng.NNGException as e:
+                            logging.error(f"Error occurred while sending data to the server: {e}")
+                            break
+
+                lost_data = self.db_handler.fetch_lost_data()       
+                for entry in lost_data:
+                    id, node_id, average, _ = entry
+                    if id not in latest_data_ids:  # Only send the data if it's not sent already
+
+                        request_data = {
+                            'id': id,
+                            'node_id': node_id,
+                            'average': average
+                        }
+                        request = json.dumps(request_data).encode('utf-8')
+
+                        with self.cloud_connected_condition:
+                            if not self.cloud_connected:
+                                logging.info("Connection lost. Buffering data for sending.")
+                                break
+                            try:
+                                self.server_socket.send(request)
+                                logging.info(f"Lost data buffered for sending to the server: {id}")
+                                with self.db_lock:
+                                    self.db_handler.update_sent_flag(id)
+                            except pynng.NNGException as e:
+                                logging.error(f"Error occurred while sending data to the server: {e}")
+                                break
 
 
     def _receive_from_server(self) -> None:
