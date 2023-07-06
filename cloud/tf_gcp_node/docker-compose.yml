@@ -1,0 +1,18 @@
+version: '3'
+services:
+  app:
+    container_name: cloud_server
+    build: .
+    ports:
+      - "63270:63270"
+      - "63271:63271"
+      - "63272:63272"
+    depends_on: 
+      - redis
+  redis:
+    image: "redis:alpine"
+    volumes:
+      - redis-data:/data
+volumes:
+  redis-data:
+    external: false
