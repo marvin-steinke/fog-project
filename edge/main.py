@@ -1,5 +1,6 @@
 import mosaik
 import mosaik.util
+from loguru import logger
 from edge_server import EdgeServer
 import time
 import configparser
@@ -31,8 +32,8 @@ sim_config = {
 def main() -> None:
     """Main function to run the simulation with EdgeServer and Mosaik.
 
-    This function initializes the EdgeServer, creates the Mosaik world, runs the simulation
-    and finally stops the EdgeServer.
+    This function initializes the EdgeServer, creates the Mosaik world, runs
+    the simulation and finally stops the EdgeServer.
     """
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
@@ -43,6 +44,8 @@ def main() -> None:
     while not edge_server.ready:
         time.sleep(.1)
 
+    # suppress mosaik warnings
+    logger.remove()
     world = mosaik.World(sim_config)
     create_scenario(world)
     world.run(until=sim_args["end"], rt_factor=1)
