@@ -1,2 +1,2 @@
-credentials_file = "../../keys/fog_cred_gcloud.json"
-project           = "fog-computing"
+credentials_file = "/Users/niklasfomin/Desktop/fc.json"
+project           = "fog-computing-389009"

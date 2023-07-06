@@ -23,6 +23,7 @@ resource "google_compute_instance" "node" {
   }
 }
 
+   
 ### network
 
 resource "google_compute_network" "vpc_network" {
