@@ -11,6 +11,7 @@ import os
 import pynng
 import re
 
+
 # Define the logger
 logger = logging.getLogger()
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
@@ -51,8 +52,8 @@ class EdgeServer:
         self.cloud_connected_condition = threading.Condition()
         
         #sockets
-        self.server_socket = pynng.Pub0()
-        self.server_socket.dial('tcp://localhost:63271')
+        # self.server_socket = pynng.Pub0()
+        # self.server_socket.dial('tcp://localhost:63271')
         
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -102,46 +103,46 @@ class EdgeServer:
                         with self.db_lock:
                             id = self.db_handler.insert_power_average(node_id, average)
                         print("Power Data queued:", id)
+                        
+                        
 
     def _connection_thread(self) -> None:
         """
         Thread that continually checks for connection and sets the cloud_connected flag.
         """
-        # Create the socket outside the with statement
-        heartbeat_socket = pynng.Pair0()
-        heartbeat_socket.dial('tcp://localhost:63270')  # Use block=False to avoid waiting if the server isn't online
-        heartbeat_socket.recv_timeout = 2000
-        
+        logging.info("Connecting to cloud node...")
         while not self.shutdown:
             try:
-                heartbeat_socket.send(b'heartbeat')
-                response = heartbeat_socket.recv(block=True)
-                connection_alive = response == b'ack'  # Renamed should_be_connected to connection_alive
-
-            except pynng.exceptions.ConnectionRefused:
-                logging.error("Connection lost with the server.")
                 connection_alive = False
-            except pynng.exceptions.Timeout:
-                logging.error("Connection timed out.")
+                heartbeat_socket = pynng.Req0()
+                heartbeat_socket.dial('tcp://localhost:63270', block=False) 
+                heartbeat_socket.send_timeout = 1000  
+                try:
+                    heartbeat_socket.send(b'heartbeat')
+                    response = heartbeat_socket.recv()
+                    connection_alive = response == b'ack'
+                    if connection_alive:
+                        logging.info("Connection to the server is established.")
+                    else:
+                        logging.info("Server is not responding...")
+                except pynng.exceptions.Timeout:
+                    logging.error("Cannot connect to server. Data transmission is halted...")
+                    connection_alive = False
+                time.sleep(3)
+            except Exception as e:
+                logging.error(f"Error occurred in the connection thread: {str(e)}")
                 connection_alive = False
-
             with self.cloud_connected_condition:
                 self.cloud_connected = connection_alive
                 self.cloud_connected_condition.notify_all()
-
-            if self.cloud_connected:
-                logging.info("Connection to the server is established.")
-            else:
-                logging.info("No connection to the server. Data transmission is halted.")
-
-            time.sleep(3)
-
         heartbeat_socket.close()
 
 
 
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
+        self.server_socket = pynng.Pub0()
+        self.server_socket.dial('tcp://localhost:63271')
         while not self.shutdown:
             with self.cloud_connected_condition:
                 self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
@@ -202,6 +203,7 @@ class EdgeServer:
                             except pynng.NNGException as e:
                                 logging.error(f"Error occurred while sending data to the server: {e}")
                                 break
+
 
 
     def _receive_from_server(self) -> None:

@@ -35,7 +35,7 @@ cache = establish_cache_connection()
 
 async def receive_heartbeat():
     """Handles the receipt of heartbeats from an edge server."""
-    with pynng.Pair0() as heartbeat_socket:
+    with pynng.Rep0() as heartbeat_socket:
         heartbeat_socket.listen('tcp://localhost:63270')
         last_heartbeat_time = time.time()
 
@@ -51,7 +51,7 @@ async def receive_heartbeat():
                     logging.error("Received an invalid message from the edge server")
             except asyncio.TimeoutError:
                 current_time = time.time()
-                if current_time - last_heartbeat_time > 10:
+                if current_time - last_heartbeat_time > 5:
                     logging.error("No connection: Heartbeat not received")
             except Exception as e:
                 logging.error(f"Error while receiving heartbeat: {e}")
