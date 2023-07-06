@@ -9,7 +9,7 @@ import subprocess
 
 logging.basicConfig(level=logging.INFO)
 
-cache_host = '127.0.0.1'
+cache_host = '10.156.0.3'
 redis_port = 6379
 redis_db = 0
 
@@ -35,8 +35,8 @@ cache = establish_cache_connection()
 
 async def receive_heartbeat():
     """Handles the receipt of heartbeats from an edge server."""
-    with pynng.Pair0() as heartbeat_socket:
-        heartbeat_socket.listen('tcp://localhost:63270')
+    with pynng.Rep0() as heartbeat_socket:
+        heartbeat_socket.listen('tcp://192.168.2.172:63270')
         last_heartbeat_time = time.time()
 
         while True:
@@ -59,7 +59,7 @@ async def receive_heartbeat():
 async def receive_data():
     """Handles the receipt of data from an edge server."""
     with pynng.Sub0() as data_socket:
-        data_socket.listen('tcp://localhost:63271')
+        data_socket.listen('tcp://192.168.2.172:63271')
         data_socket.subscribe(b'')
         while True:
             try:
@@ -86,7 +86,7 @@ async def plz_data(id):
     """
     with pynng.Pub0() as ack_socket:
         try:
-            ack_socket.dial('tcp://localhost:63272')
+            ack_socket.dial('tcp://192.168.2.172:63272')
             plz = generate_plz(str(id))
             postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
             await ack_socket.asend(postal_code)
