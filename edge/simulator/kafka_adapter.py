@@ -15,11 +15,11 @@ META = {
 }
 
 class KafkaAdapterModel():
-    """Defines a model for Kafka adapter which initializes a Kafka producer and
-    produces messages.
+    """Model for Kafka adapter: Initialize Kafka producer and produce messages.
 
     Args:
-        kafka_address (str): Address of the Kafka server. Defaults to "localhost:9092".
+        kafka_address (str): Address of the Kafka server. Defaults to
+            "localhost:9092".
     """
 
     def __init__(self, kafka_address: str = "localhost:9092") -> None:
@@ -58,7 +58,8 @@ class KafkaAdapter(mosaik_api.Simulator):
     """Mosaik Simulator class for Kafka Adapter which manages the creation and
     stepping of KafkaAdapterModel instances.
 
-    It also manages getting data from the models and stepping the simulation.
+    Manages the creation, stepping of KafkaAdapterModel instances and getting
+    data from the models and stepping the simulation.
     """
     def __init__(self) -> None:
         super().__init__(META)
@@ -88,7 +89,8 @@ class KafkaAdapter(mosaik_api.Simulator):
         Args:
             num (int): Number of entities to be created.
             model (str): The model name.
-            kafka_address (str, optional): Address of the Kafka server. Defaults to "localhost:9092".
+            kafka_address (str, optional): Address of the Kafka server.
+                Defaults to "localhost:9092".
 
         Returns:
             list: A list of dictionaries representing the created entities.
@@ -108,7 +110,8 @@ class KafkaAdapter(mosaik_api.Simulator):
         Args:
             time (int): Current time of the simulation.
             inputs (dict): Input data for this step.
-            max_advance (int): Maximum time that the simulator can advance in one step.
+            max_advance (int): Maximum time that the simulator can advance in
+                one step.
 
         Returns:
             None
@@ -129,7 +132,8 @@ class KafkaAdapter(mosaik_api.Simulator):
         """Mosaik: Get output data for the given entity and attributes.
 
         Args:
-            outputs (dict): A dictionary of entity ids and their requested attributes.
+            outputs (dict): A dictionary of entity ids and their requested
+                attributes.
 
         Returns:
             dict: The data for the requested entities and attributes.

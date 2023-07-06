@@ -6,8 +6,7 @@ from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer
 
 class EdgeServer:
-    """Server that processes streaming data, computes average power values for
-    nodes in a 30-second window, and publishes results.
+    """Server that processes streaming data and publishes results.
 
     The `EdgeServer` class is a server that interfaces with Apache Kafka to
     process streaming data. It consumes messages from a specified input Kafka
@@ -41,8 +40,7 @@ class EdgeServer:
         self.shutdown = False
 
     def _consumer_thread(self) -> None:
-        """Consumes messages from the input Kafka topic and stores the values
-        in the data attribute."""
+        """Consumes messages from input Kafka topic and stores the values."""
         while not self.shutdown:
             messages = self.consumer.poll(timeout_ms=1000)
             for message in messages.values():
@@ -52,8 +50,7 @@ class EdgeServer:
                     self.data[node_id].append(power_value)
 
     def _producer_thread(self) -> None:
-        """Periodically calculates averages of the power values and sends them
-        to the output Kafka topic."""
+        """Periodically calculates averages of the power values."""
         while not self.shutdown:
             for _ in range(30):
                 if self.shutdown:
@@ -68,8 +65,7 @@ class EdgeServer:
                         values.clear()
 
     def run(self) -> None:
-        """Starts the consumer and producer threads, and sets the ready
-        attribute to True."""
+        """Starts the consumer and producer threads."""
         self.consumer_thread = Thread(target=self._consumer_thread)
         self.producer_thread = Thread(target=self._producer_thread)
         self.consumer_thread.start()
@@ -77,8 +73,7 @@ class EdgeServer:
         self.ready = True
 
     def stop(self) -> None:
-        """Stops the consumer and producer threads, and sets the ready
-        attribute to False."""
+        """Stops the consumer and producer threads."""
         self.shutdown = True
         self.consumer_thread.join()
         self.producer_thread.join()

@@ -31,8 +31,10 @@ class Household(mosaik_csv.CSV):
             time_resolution (int): Time resolution for simulation.
             datafile (str): Path to the data file (CSV).
             household_name (str): Name of the household.
-            sim_start (Optional[str], optional): Simulation start date. Defaults to None.
-            date_format (str, optional): Date format in the CSV. Defaults to "YYYY-MM-DD HH:mm:ss".
+            sim_start (Optional[str], optional): Simulation start date.
+                Defaults to None.
+            date_format (str, optional): Date format in the CSV. Defaults to
+                "YYYY-MM-DD HH:mm:ss".
             delimiter (str, optional): Delimiter for CSV. Defaults to ",".
 
         Returns:
@@ -47,12 +49,14 @@ class Household(mosaik_csv.CSV):
         """Mosaik: Create a unique entity for the Household instance.
 
         Args:
-            num (int): The number of entities to create. Should only be 1 for this model.
+            num (int): The number of entities to create. Should only be 1 for
+                this model.
             model (str): The model name.
 
         Raises:
             ValueError: If the model name is incorrect.
-            RuntimeError: If trying to create more than one instance or the entity id already exists.
+            RuntimeError: If trying to create more than one instance or the
+                entity id already exists.
 
         Returns:
             list: The entity id and type in a dictionary.
@@ -90,7 +94,8 @@ class Household(mosaik_csv.CSV):
             csv_file (str): Path to the CSV file.
 
         Returns:
-            Optional[str]: The first date string in the CSV file, or None if no date found.
+            Optional[str]: The first date string in the CSV file, or None if no
+                date found.
         """
         with open(csv_file, 'r') as file:
             reader = csv.reader(file)

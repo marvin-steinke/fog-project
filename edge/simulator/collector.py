@@ -49,11 +49,13 @@ class Collector(mosaik_api.Simulator):
         """Mosaik: Create a unique entity for the Monitor instance.
 
         Args:
-            num (int): The number of entities to create. Should only be 1 for this model.
+            num (int): The number of entities to create. Should only be 1 for
+                this model.
             model (str): The model name.
 
         Raises:
-            RuntimeError: If trying to create more than one instance or the entity id already exists.
+            RuntimeError: If trying to create more than one instance or the
+                entity id already exists.
 
         Returns:
             list: The entity id and type in a dictionary.
@@ -70,7 +72,8 @@ class Collector(mosaik_api.Simulator):
         Args:
             time (int): Current time of the simulation.
             inputs (dict): Input data for this step.
-            max_advance (int): Maximum time that the simulator can advance in one step.
+            max_advance (int): Maximum time that the simulator can advance in
+                one step.
 
         Returns:
             None
