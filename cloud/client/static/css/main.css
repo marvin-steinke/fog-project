@@ -1,4 +1,5 @@
 /* Body styles */
+/* Body styles */
 body {
   font-family: Arial, sans-serif;
   background-color: #f7f7f7;
@@ -7,13 +8,25 @@ body {
   padding: 0;
 }
 
+#topLeftImage {
+  position: absolute;
+  top: -5%;
+  left: 1%;
+  width: 200px;
+  /* Adjust width as needed */
+  height: 200px;
+  /* Adjust height as needed */
+  object-fit: contain;
+}
+
+/* ... Rest of your CSS ... */
+
 /* Header styles */
 h1 {
   font-size: 24px;
   text-align: center;
   padding: 20px 0;
   margin-top: 10px;
-  /* Adjust the margin-top value as needed */
 }
 
 /* Data container styles */
@@ -29,7 +42,7 @@ h1 {
 /* TU Berlin line styles */
 #tuBerlinLine {
   position: relative;
-  margin-top: 140px;
+  margin-top: 160px;
   height: 10px;
   width: 100%;
   display: flex;
@@ -48,6 +61,18 @@ h1 {
   z-index: -1;
 }
 
+#tuBerlinImage {
+  position: absolute;
+  top: 50%;
+  left: 7%;
+  width: 800%;
+  /* increased this */
+  height: 800%;
+  /* increased this */
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+}
+
 /* Logo styles */
 .tu-logo,
 .einstein-logo,
@@ -56,12 +81,10 @@ h1 {
   display: flex;
   align-items: center;
   margin-right: 20px;
-  /* Adjust the margin value as desired */
 }
 
 .tu-logo {
   margin-left: 0;
-  /* Remove the left margin for the first logo */
 }
 
 .logo img {
@@ -113,25 +136,23 @@ h1 {
   display: flex;
   flex-wrap: nowrap;
   overflow-x: hidden;
-  width: 200px;
-  /* Adjust the width as desired */
+  width: 800px;
   height: 40px;
-  /* Adjust the height as desired */
   margin: 20px auto;
-  /* Adjust the margin as needed */
-  font-size: 0.8em;
-  /* Adjust the font size as needed */
+  font-size: 1.0em;
   font-weight: bold;
-  /* Add bold font weight */
   align-items: center;
-  /* Center the text vertically */
 }
 
 .cost-item {
   padding: 5px;
   white-space: nowrap;
+  min-width: 200px;
+  /* Adjust this value based on your needs */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* This will add ... if the text is too long to fit in the box */
   animation: slide 10s linear infinite;
-  /* Adjust the animation duration as needed */
 }
 
 @keyframes slide {

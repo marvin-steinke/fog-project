@@ -27,10 +27,14 @@ $(document).ready(function () {
           }
         },
         y: {
+      title: {
+        display: true,
+        text: 'Power Consumption (kw/h)'
+      },
           beginAtZero: true,
           min: 0,
-          max: 700000,
-          stepSize: 50000
+          max: 400000,
+          stepSize: 5000,
         }
       }
     }
@@ -49,9 +53,10 @@ $(document).ready(function () {
           data.forEach(function (item) {
             var city = item.cityName;
             var cost = item.cost.toFixed(2);
+            var power = item.powerAverage.toFixed(2); // getting the powerAverage value
             var costItem = document.createElement('div');
             costItem.classList.add('cost-item');
-            costItem.innerText = 'Cost of ' + city + ': €' + cost;
+            costItem.innerText = city + ': €' + cost + ', Power: ' + power + ' units';
             costDisplay.appendChild(costItem);
           });
 
@@ -62,7 +67,7 @@ $(document).ready(function () {
             offset += 200;
           });
 
-          if (costItems.length > 5) {
+          if (costItems.length > 3) {
             costDisplay.removeChild(costItems[0]);
           }
 
@@ -88,7 +93,7 @@ $(document).ready(function () {
   }
 
   fetchData();
-  setInterval(fetchData, 5000);
+  setInterval(fetchData, 10000);
 
   $("#schemaImage").click(function () {
     $("#enlargedSchemaImage").addClass("show");
