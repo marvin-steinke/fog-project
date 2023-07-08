@@ -43,10 +43,8 @@ async def receive_heartbeat():
             try:
                 message = await asyncio.wait_for(heartbeat_socket.arecv(), timeout=5)
                 if message == b'heartbeat':
-                    logging.info("Received heartbeat from edge server")
                     last_heartbeat_time = time.time()
                     await heartbeat_socket.asend(b'ack')
-                    logging.info("Sent Ack to Edge server")
                 else:
                     logging.error("Received an invalid message from the edge server")
             except asyncio.TimeoutError:
@@ -68,7 +66,7 @@ async def receive_data():
                 id = request_data.get('id', 'Unknown')
                 node_id = request_data.get('node_id', 'Unknown')
                 average = request_data.get('average', 'Unknown')
-                logging.info(f"Received data from edge server - id: {id}, node_id: {node_id}, average: {average}")
+                logging.info(f"Received data from edge server - id: {id}")
                 await plz_data(id)
                 cache_data(id, average)
             except pynng.exceptions.TryAgain:

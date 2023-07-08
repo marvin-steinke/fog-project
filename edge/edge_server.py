@@ -150,14 +150,15 @@ class EdgeServer:
                 if not self.cloud_connected:
                     continue
 
-                latest_data_ids = set()  
+                latest_data_ids = set()
                 new_data = self.db_handler.fetch_latest_data()
-                if not new_data:  
+                if not new_data:
                     continue
 
-                for entry in new_data:            
+                # Send new data
+                for entry in new_data:
                     id, node_id, average = entry
-                    latest_data_ids.add(id)  
+                    latest_data_ids.add(id)
 
                     request_data = {
                         'id': id,
@@ -172,18 +173,18 @@ class EdgeServer:
                             break
                         try:
                             self.server_socket.send(request)
-                            logging.info(f"Data buffered for sending to the server: {id}") 
+                            logging.info(f"Queued Data buffered for sending to the server: {id}")
                             with self.db_lock:
                                 self.db_handler.update_sent_flag(id)
                         except pynng.NNGException as e:
                             logging.error(f"Error occurred while sending data to the server: {e}")
                             break
 
-                lost_data = self.db_handler.fetch_lost_data()       
+                # Send lost data if not already sent
+                lost_data = self.db_handler.fetch_lost_data()
                 for entry in lost_data:
                     id, node_id, average, _ = entry
-                    if id not in latest_data_ids:  # Only send the data if it's not sent already
-
+                    if id not in latest_data_ids:  
                         request_data = {
                             'id': id,
                             'node_id': node_id,
@@ -197,12 +198,13 @@ class EdgeServer:
                                 break
                             try:
                                 self.server_socket.send(request)
-                                logging.info(f"Lost data buffered for sending to the server: {id}")
+                                logging.info(f"Queued Data buffered for sending to the server: {id}")
                                 with self.db_lock:
                                     self.db_handler.update_sent_flag(id)
                             except pynng.NNGException as e:
                                 logging.error(f"Error occurred while sending data to the server: {e}")
                                 break
+
 
 
 
