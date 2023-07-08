@@ -1,0 +1,197 @@
+/* Body styles */
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f7f7f7;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+#topLeftImage {
+  position: absolute;
+  top: -5%;
+  left: 1%;
+  width: 200px;
+  /* Adjust width as needed */
+  height: 200px;
+  /* Adjust height as needed */
+  object-fit: contain;
+}
+
+/* Header styles */
+h1 {
+  font-size: 24px;
+  text-align: center;
+  padding: 20px 0;
+  margin-top: 10px;
+}
+
+/* Data container styles */
+#chartContainer {
+  width: 50%;
+  margin: auto;
+  padding: 20px;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#tuBerlinLine {
+  position: relative;
+  margin-top: 160px;
+  height: 10px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+#tuBerlinLine::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 150px;
+  background-image: linear-gradient(to right, #1f90cc, rgba(73, 203, 64, 0.3));
+  transform: translateY(-50%);
+  z-index: -1;
+}
+
+#tuBerlinImage {
+  position: absolute;
+  top: 50%;
+  left: 7%;
+  width: 800%;
+  height: 800%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+}
+
+.tu-logo,
+.einstein-logo,
+.schema-logo,
+.github {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+}
+
+.tu-logo {
+  margin-left: 0;
+}
+
+.logo img {
+  max-height: 50px;
+  width: auto;
+  height: auto;
+}
+
+.logo img.tu-logo {
+  width: 100px;
+  height: auto;
+}
+
+.logo img.einstein-logo {
+  width: 100px;
+}
+
+.logo img.github-logo {
+  width: 40px;
+}
+
+.links a {
+  color: white;
+  margin: 0 5px;
+  text-decoration: none;
+}
+
+.links a:hover {
+  text-decoration: underline;
+}
+
+/* Animation styles */
+@keyframes fadeAnimation {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeAnimation 0.5s ease-in-out;
+}
+
+#costDisplay {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: hidden;
+  width: 800px;
+  height: 40px;
+  margin: 20px auto;
+  font-size: 1.0em;
+  font-weight: bold;
+  align-items: center;
+}
+
+.cost-item {
+  padding: 5px;
+  white-space: nowrap;
+  min-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: slide 10s linear infinite;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+#enlargedSchemaImage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  cursor: zoom-out;
+}
+
+#enlargedSchemaImage img {
+  max-width: 90%;
+  max-height: 90%;
+}
+
+#enlargedSchemaImage.show {
+  display: flex;
+}
+
+@media (max-width: 480px) {
+  #chartContainer {
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 16px;
+  }
+
+  #costDisplay {
+    font-size: 1em;
+  }
+
+  .logo img {
+    width: 100px;
+  }
+}

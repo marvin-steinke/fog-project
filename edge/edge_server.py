@@ -50,10 +50,14 @@ class EdgeServer:
         self.server_socket = None
         self.cloud_connected = False
         self.cloud_connected_condition = threading.Condition()
-        
-        #sockets
-        # self.server_socket = pynng.Pub0()
-        # self.server_socket.dial('tcp://34.141.104.207.168.2.172.internal:63271')
+                
+        # destination config
+        # self.gcloud_node_heartbeat = "tcp://34.141.104.207:63270"
+        # self.gcloud_node_data = "tcp://34.141.104.207:63271"
+        # self.gcloud_node_plz = "tcp://34.141.104.207:63272"
+        self.local_heartbeat_port = "tcp://localhost:63270"
+        self.local_data_port = "tcp://localhost:63271"
+        self.local_plz_port = "tcp://localhost:63272"
         
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -115,7 +119,7 @@ class EdgeServer:
             try:
                 connection_alive = False
                 heartbeat_socket = pynng.Req0()
-                heartbeat_socket.dial('tcp://34.141.104.207:63270', block=False) 
+                heartbeat_socket.dial(self.local_heartbeat_port, block=False) 
                 heartbeat_socket.send_timeout = 1000  
                 try:
                     heartbeat_socket.send(b'heartbeat')
@@ -142,7 +146,7 @@ class EdgeServer:
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
         self.server_socket = pynng.Pub0()
-        self.server_socket.dial('tcp://34.141.104.207:63271')
+        self.server_socket.dial(self.local_data_port)
         while not self.shutdown:
             with self.cloud_connected_condition:
                 self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
@@ -221,7 +225,7 @@ class EdgeServer:
                 continue
             try:
                 with pynng.Sub0() as socket:
-                    socket.listen('tcp://34.141.104.207:63272')
+                    socket.listen(self.local_plz_port)
                     socket.subscribe(b'')
                     while True:
                         try:
