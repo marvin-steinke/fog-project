@@ -8,8 +8,7 @@ WORKDIR /fog-app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 RUN apt-get update && apt-get install -y redis-server
-RUN pip install pynng
-RUN pip install asyncio
+
 
 # Copying the source code
 COPY . /fog-app
@@ -19,6 +18,7 @@ EXPOSE 37329
 EXPOSE 63270    
 EXPOSE 63271
 EXPOSE 63272
+EXPOSE 5006
 
 # Specify the command to execute the server script
 CMD ["python3", "cloud_server.py"]
