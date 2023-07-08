@@ -66,8 +66,8 @@ Edge Component:
 - `kafka_adapter.py`: Contains the `KafkaAdapter` and `KafkaAdapterModel` classes, responsible for connecting the Mosaik simulation with the Kafka data stream.
 - `collector.py`: Contains the `Collector` simulator that collects all power data.
 - `main.py`: Contains the main function for starting the simulation.
-- `edge_server.py`: Contains the `EdgeServer` class for reading, writing and inserting the produced data from the Kafka topics into sqlite. Furthermore 3 concurrent threads are used to continously check connectivity, publish the data read from the kafka topics and the sqlite database and subscribing to messages from the cloud-server.
-- `db_operations`: Contains the database operations used by the `ÈdgeServer` create a schema, insert tuples coming from the kafka producer thread, fetch newly inserted & lost data by tracking and checking the sent flag, as well as inserting the received messages by the cloud-server.
+- `edge_server.py`: Contains the `EdgeServer` class for reading, writing and inserting the produced data from the Kafka topics into sqlite. Furthermore 3 concurrent threads are used to continously check connectivity, publish the data read from the kafka topics and the sqlite database and subscribing to messages from the cloud-server. For messaging we use Pynng which is a python wrapper of the lightweight, high-performance messaging library and initially does not provide "reliable" features such as message buffering or connection retries. It is considered to be based on zeroMQ but aims to simplify the usage.
+- `db_operations`: Contains the database operations for the lightweight, file-based SQLite database that is used by the `ÈdgeServer`, creates a schema, insert tuples coming from the kafka producer thread, fetch newly inserted & lost data by tracking and checking the sent flag, as well as inserting the received messages by the cloud-server.
 
 ### Usage
 
@@ -129,6 +129,10 @@ The cloud node runs the `cloud_server.py` file to asynchronously interact with t
     ```
 
 4. Access the frontend by:
+    
+    ```
+    python data_fetcher.py
+    ```
 
     ```
     http://IP-of-the-cloud-server:5006
