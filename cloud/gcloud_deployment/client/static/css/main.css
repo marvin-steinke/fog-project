@@ -1,5 +1,4 @@
 /* Body styles */
-/* Body styles */
 body {
   font-family: Arial, sans-serif;
   background-color: #f7f7f7;
@@ -19,8 +18,6 @@ body {
   object-fit: contain;
 }
 
-/* ... Rest of your CSS ... */
-
 /* Header styles */
 h1 {
   font-size: 24px;
@@ -39,7 +36,6 @@ h1 {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* TU Berlin line styles */
 #tuBerlinLine {
   position: relative;
   margin-top: 160px;
@@ -66,14 +62,11 @@ h1 {
   top: 50%;
   left: 7%;
   width: 800%;
-  /* increased this */
   height: 800%;
-  /* increased this */
   transform: translate(-50%, -50%);
   object-fit: contain;
 }
 
-/* Logo styles */
 .tu-logo,
 .einstein-logo,
 .schema-logo,
@@ -131,7 +124,6 @@ h1 {
   animation: fadeAnimation 0.5s ease-in-out;
 }
 
-/* Additional styles for the modified layout */
 #costDisplay {
   display: flex;
   flex-wrap: nowrap;
@@ -148,10 +140,8 @@ h1 {
   padding: 5px;
   white-space: nowrap;
   min-width: 200px;
-  /* Adjust this value based on your needs */
   overflow: hidden;
   text-overflow: ellipsis;
-  /* This will add ... if the text is too long to fit in the box */
   animation: slide 10s linear infinite;
 }
 

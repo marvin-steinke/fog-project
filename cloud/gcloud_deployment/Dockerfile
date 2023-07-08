@@ -6,15 +6,13 @@ WORKDIR /fog-app
 
 # Install dependencies
 COPY requirements.txt .
+RUN apt-install python3-pip
 RUN pip install -r requirements.txt
-RUN apt-get update && apt-get install -y redis-server
-
 
 # Copying the source code
 COPY . /fog-app
 
 # Exposing the ports
-EXPOSE 37329
 EXPOSE 63270    
 EXPOSE 63271
 EXPOSE 63272
