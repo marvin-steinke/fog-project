@@ -131,15 +131,24 @@ def cache_data(id, node_average):
 async def main():
     """Main function that runs data fetcher, and creates tasks for receiving data and heartbeats."""
 
+    # Start data_fetcher.py as a subprocess
+    data_fetcher_process = subprocess.Popen(["python3", "../client/data_fetcher.py"], 
+                                            stdout=subprocess.PIPE, 
+                                            stderr=subprocess.PIPE)
+
+    # Create tasks for receiving data and heartbeats
     receive_task = asyncio.create_task(receive_data())
     heartbeat_task = asyncio.create_task(receive_heartbeat())
 
-    await asyncio.gather(receive_task, heartbeat_task)
-    
-    # start flask backend 
-    data_fetcher_process = subprocess.Popen(["python3", "/../client/data_fetcher.py"], 
-                                            stdout=subprocess.PIPE, 
-                                            stderr=subprocess.PIPE)
+    try:
+        # Await the tasks
+        await asyncio.gather(receive_task, heartbeat_task)
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+    finally:
+        # If the tasks complete (or an exception occurs causing them to exit), terminate the subprocess
+        data_fetcher_process.terminate()
+        logging.info("Terminated data_fetcher.py subprocess.")
 
 try:
     asyncio.run(main())
