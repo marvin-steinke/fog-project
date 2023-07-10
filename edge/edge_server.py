@@ -10,6 +10,7 @@ import logging
 import os
 import pynng
 import re
+import configparser
 
 
 # Define the logger
@@ -18,8 +19,7 @@ logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
 
 class EdgeServer:
-    """Server that processes streaming data, computes average power values for
-    nodes in a 30-second window, and publishes results.
+    """Server that processes streaming data and publishes results.
 
     The `EdgeServer` class is a server that interfaces with Apache Kafka to
     process streaming data. It consumes messages from a specified input Kafka
@@ -38,24 +38,29 @@ class EdgeServer:
     """
 
     def __init__(self, bootstrap_servers: str, input_topic: str, output_topic: str, db_handler: dbHandler) -> None:
-        
+
         self.logger = logging.getLogger("EdgeServer")
-        
+
         # db stuff
         db_file = os.path.join(os.path.dirname(__file__), '..', 'local.db')
         self.db_handler = db_handler
         self.db_lock = Lock()
-        
+
         # connection flags
         self.server_socket = None
         self.cloud_connected = False
         self.cloud_connected_condition = threading.Condition()
-                
+
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        gcp_node_address = config.get("Server", "gcp_node")
+
+
         # destination config
-        self.gcloud_node_heartbeat = "tcp://34.89.132.168:63270"
-        self.gcloud_node_data = "tcp://34.89.132.168:63271"
-        self.gcloud_node_plz = "tcp://34.89.132.168:63272"
-        
+        self.gcloud_node_heartbeat = f"tcp://{gcp_node_address}:63270"
+        self.gcloud_node_data = "tcp://{gcp_node_address}:63271"
+        self.gcloud_node_plz = "tcp://{gcp_node_address}:63272"
+
         # sensor simulation
         self.consumer = KafkaConsumer(
             input_topic,
@@ -72,10 +77,8 @@ class EdgeServer:
         self.ready = False
         self.shutdown = False
 
-
     def _consumer_thread(self) -> None:
-        """Consumes messages from the input Kafka topic and stores the values
-        in the data attribute."""
+        """Consumes messages from input Kafka topic and stores the values."""
         while not self.shutdown:
             messages = self.consumer.poll(timeout_ms=1000)
             for message in messages.values():
@@ -84,16 +87,14 @@ class EdgeServer:
                 with self.lock:
                     self.data[node_id].append(power_value)
 
-
     def _producer_thread(self) -> None:
-        """Periodically calculates averages of the power values and sends them
-        to the output Kafka topic or fetches unsent and unacknowledged data from the local db and sends it to the cloud node."""
+        """Periodically calculates averages of the power values."""
         while not self.shutdown:
             for _ in range(5):
                 if self.shutdown:
                     return
                 time.sleep(1)
-                
+
             with self.lock:
                 for node_id, values in self.data.items():
                     if values:
@@ -104,20 +105,16 @@ class EdgeServer:
                         with self.db_lock:
                             id = self.db_handler.insert_power_average(node_id, average)
                         print("Power Data queued:", id)
-                        
-                        
 
     def _connection_thread(self) -> None:
-        """
-        Thread that continually checks for connection and sets the cloud_connected flag.
-        """
+        """Thread that continually checks for connection."""
         logging.info("Connecting to cloud node...")
         while not self.shutdown:
             try:
                 connection_alive = False
                 heartbeat_socket = pynng.Req0()
-                heartbeat_socket.dial(self.gcloud_node_heartbeat, block=False) 
-                heartbeat_socket.send_timeout = 1000  
+                heartbeat_socket.dial(self.gcloud_node_heartbeat, block=False)
+                heartbeat_socket.send_timeout = 1000
                 try:
                     heartbeat_socket.send(b'heartbeat')
                     response = heartbeat_socket.recv()
@@ -137,8 +134,6 @@ class EdgeServer:
                 self.cloud_connected = connection_alive
                 self.cloud_connected_condition.notify_all()
         heartbeat_socket.close()
-
-
 
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
@@ -187,7 +182,7 @@ class EdgeServer:
                 lost_data = self.db_handler.fetch_lost_data()
                 for entry in lost_data:
                     id, node_id, average, _ = entry
-                    if id not in latest_data_ids:  
+                    if id not in latest_data_ids:
                         request_data = {
                             'id': id,
                             'node_id': node_id,
@@ -212,8 +207,7 @@ class EdgeServer:
 
 
     def _handle_response_from_server(self, message) -> None:
-        """
-        Handle the response from the server.
+        """Handle the response from the server.
 
         Args:
             message: The response message received from the server.
@@ -237,28 +231,26 @@ class EdgeServer:
 
 
     def run(self) -> None:
-        """Starts the consumer, producer, connection_check and data_send threads,
-        and sets the ready attribute to True."""
-        
+        """Starts consumer, producer, connection_check and data_send threads."""
+
         try:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
             self.connection_check_thread = Thread(target=self._connection_thread)
-            self.data_send_thread = Thread(target=self._data_sender)            
+            self.data_send_thread = Thread(target=self._data_sender)
             self.connection_check_thread.start()
             #time.sleep(3)
             self.consumer_thread.start()
             self.producer_thread.start()
-            
+
             self.data_send_thread.start()
             self.ready = True
-        
+
         except Exception as e:
             self.logger.error("Error occurred while running the EdgeServer: %s", e)
 
     def stop(self) -> None:
-        """Stops the consumer, producer, connection_check, and data_send threads, 
-        and sets the ready attribute to False."""
+        """Stops consumer, producer, connection_check, and data_send threads."""
         self.shutdown = True
         try:
             if self.consumer_thread.is_alive():
@@ -279,3 +271,4 @@ class EdgeServer:
         finally:
             self.ready = False
             self.db_handler.close_connection()
+

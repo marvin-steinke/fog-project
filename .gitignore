@@ -57,3 +57,6 @@ __pycache__
 .ruff_cache
 .pytest_cache
 __pycache__
+venv
+
+build

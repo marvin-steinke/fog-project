@@ -6,7 +6,7 @@ cp -r fog-project/cloud/gcloud_deployment server
 rm -rf fog-project
 cd server
 pip3 install -r requirements.txt
-# comment for video
-# python3 cloud-server.py
+# uncomment for automatically starting cloud-server application
+# python3 cloud-server.py &
 cd web-client
 python3 data_fetcher.py &

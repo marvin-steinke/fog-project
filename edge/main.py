@@ -1,12 +1,11 @@
 import mosaik
 import mosaik.util
+from loguru import logger
 from edge_server import EdgeServer
 from local_db.db_operations import dbHandler
 import time
 import configparser
 import os
-
-# TODO: (Niklas Fomin, 2023-06-08) add type hints, docstrings, and logging
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -33,26 +32,29 @@ sim_config = {
 def main() -> None:
     """Main function to run the simulation with EdgeServer and Mosaik.
 
-    This function initializes the EdgeServer with its the local database, creates the Mosaik world, runs the simulation
-    and finally stops the EdgeServer.
+    This function initializes the EdgeServer with its the local database,
+    creates the Mosaik world, runs the simulation and finally stops the
+    EdgeServer.
     """
-    
+
     edge_node_dir = os.path.dirname(os.path.abspath(__file__))
     db_file_path = os.path.join(edge_node_dir, 'local.db')
     db_handler = dbHandler(db_file_path)
     db_handler.create_schema()
-    
+
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
             output_topic="avg_power_topic",
             db_handler=db_handler,
-        ) 
-    
+        )
+
     edge_server.run()
     while not edge_server.ready:
         time.sleep(.1)
 
+    # suppress mosaik warnings
+    logger.remove()
     world = mosaik.World(sim_config)
     create_scenario(world)
     world.run(until=sim_args["end"], rt_factor=1)
