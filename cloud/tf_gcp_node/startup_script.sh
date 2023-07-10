@@ -1,5 +1,5 @@
 apt-get update
-apt-get install python3-pip git -y
+apt-get install redis-tools redis-server python3-pip git -y
 cd /opt
 git clone --depth 1 -b feature/edge-cloud-client https://github.com/marvin-steinke/fog-project.git
 cp -r fog-project/cloud/gcloud_deployment server
