@@ -3,4 +3,3 @@ redis
 asyncio
 redis
 flask
-redis-server
