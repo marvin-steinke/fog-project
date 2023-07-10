@@ -36,7 +36,7 @@ cache = establish_cache_connection()
 async def receive_heartbeat():
     """Handles the receipt of heartbeats from an edge server."""
     with pynng.Rep0() as heartbeat_socket:
-        heartbeat_socket.listen('tcp://192.168.2.172:63270') # needs to be adjusted according to local component.
+        heartbeat_socket.listen('tcp://0.0.0.0:63270')
         last_heartbeat_time = time.time()
 
         while True:
@@ -57,7 +57,7 @@ async def receive_heartbeat():
 async def receive_data():
     """Handles the receipt of data from an edge server."""
     with pynng.Sub0() as data_socket:
-        data_socket.listen('tcp://192.168.2.172:63271') # needs to be adjusted according to local component.
+        data_socket.listen('tcp://0.0.0.0:63271')
         data_socket.subscribe(b'')
         while True:
             try:
@@ -78,13 +78,13 @@ async def receive_data():
 
 async def plz_data(id):
     """Sends postal code back to the edge server.
-    
+
     Args:
         id: The unique identifier for which the postal code is to be generated.
     """
     with pynng.Pub0() as ack_socket:
         try:
-            ack_socket.dial('tcp://192.168.2.172:63272')    # needs to be adjusted according to local component.
+            ack_socket.dial('tcp://0.0.0.0:63272')
             plz = generate_plz(str(id))
             postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
             await ack_socket.asend(postal_code)
@@ -96,10 +96,10 @@ async def plz_data(id):
 
 def generate_plz(id):
     """Generates a postal code based on the given id.
-    
+
     Args:
         id (str): The unique identifier for which the postal code is to be generated.
-    
+
     Returns:
         str: A postal code based on the given id.
     """
@@ -109,13 +109,13 @@ def generate_plz(id):
 
 def cache_data(id, node_average):
     """Cache data in redis server.
-    
+
     Args:
         id (str): The unique identifier of the data to be cached.
         node_average (str): The average node data to be cached.
     """
     try:
-        cache.set(id, node_average)  
+        cache.set(id, node_average)
         logging.info(f"Cached data - id: {id}, node_average: {node_average}")
     except Exception as e:
         logging.error(f"Error while caching data: {e}")
@@ -123,11 +123,11 @@ def cache_data(id, node_average):
 
 async def main():
     """Main function that runs data fetcher, and creates tasks for receiving data and heartbeats."""
-    # start flask backend 
-    data_fetcher_process = subprocess.Popen(["python3", "../client/data_fetcher.py"], 
-                                            stdout=subprocess.PIPE, 
+    # start flask backend
+    data_fetcher_process = subprocess.Popen(["python3", "../client/data_fetcher.py"],
+                                            stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE)
-    
+
     receive_task = asyncio.create_task(receive_data())
     heartbeat_task = asyncio.create_task(receive_heartbeat())
 

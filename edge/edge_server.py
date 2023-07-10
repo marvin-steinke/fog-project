@@ -52,12 +52,9 @@ class EdgeServer:
         self.cloud_connected_condition = threading.Condition()
                 
         # destination config
-        # self.gcloud_node_heartbeat = "tcp://34.141.104.207:63270"
-        # self.gcloud_node_data = "tcp://34.141.104.207:63271"
-        # self.gcloud_node_plz = "tcp://34.141.104.207:63272"
-        self.local_heartbeat_port = "tcp://localhost:63270"
-        self.local_data_port = "tcp://localhost:63271"
-        self.local_plz_port = "tcp://localhost:63272"
+        self.gcloud_node_heartbeat = "tcp://34.107.25.174:63270"
+        self.gcloud_node_data = "tcp://34.107.25.174:63271"
+        self.gcloud_node_plz = "tcp://34.107.25.174:63272"
         
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -119,7 +116,7 @@ class EdgeServer:
             try:
                 connection_alive = False
                 heartbeat_socket = pynng.Req0()
-                heartbeat_socket.dial(self.local_heartbeat_port, block=False) 
+                heartbeat_socket.dial(self.gcloud_node_heartbeat, block=False) 
                 heartbeat_socket.send_timeout = 1000  
                 try:
                     heartbeat_socket.send(b'heartbeat')
@@ -146,7 +143,7 @@ class EdgeServer:
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
         self.server_socket = pynng.Pub0()
-        self.server_socket.dial(self.local_data_port)
+        self.server_socket.dial(self.gcloud_node_data)
         while not self.shutdown:
             with self.cloud_connected_condition:
                 self.cloud_connected_condition.wait_for(lambda: self.cloud_connected)
@@ -225,7 +222,7 @@ class EdgeServer:
                 continue
             try:
                 with pynng.Sub0() as socket:
-                    socket.listen(self.local_plz_port)
+                    socket.listen(self.gcloud_node_plz)
                     socket.subscribe(b'')
                     while True:
                         try:
