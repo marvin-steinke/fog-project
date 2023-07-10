@@ -67,7 +67,8 @@ accessible on the web.
     ```
 
 2. Configure the simulation parameters in the `config.ini` file, including the
-   start and end time of the simulation, and the address of the Kafka server.
+   start and end time of the simulation, and the address of the Kafka and gcp
+   server.
 
 4. Create, activate a python virtual environment and install the requirements:
 
