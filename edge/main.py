@@ -2,10 +2,10 @@ import mosaik
 import mosaik.util
 from loguru import logger
 from edge_server import EdgeServer
+from local_db.db_operations import dbHandler
 import time
 import configparser
 import os
-
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -13,7 +13,7 @@ sim_args = {
     "start": config.get("Sim", "start"),
     "end": config.getint("Sim", "end"),
     "household_data_dir": config.get("Sim", "household_data_dir"),
-    "kafka_address": config.get("Server", "kafka_address")
+    "kafka_address": config.get("Server", "kafka_address"),
 }
 
 sim_config = {
@@ -32,14 +32,23 @@ sim_config = {
 def main() -> None:
     """Main function to run the simulation with EdgeServer and Mosaik.
 
-    This function initializes the EdgeServer, creates the Mosaik world, runs
-    the simulation and finally stops the EdgeServer.
+    This function initializes the EdgeServer with its the local database,
+    creates the Mosaik world, runs the simulation and finally stops the
+    EdgeServer.
     """
+
+    edge_node_dir = os.path.dirname(os.path.abspath(__file__))
+    db_file_path = os.path.join(edge_node_dir, 'local.db')
+    db_handler = dbHandler(db_file_path)
+    db_handler.create_schema()
+
     edge_server = EdgeServer(
             bootstrap_servers=sim_args["kafka_address"],
             input_topic="power_topic",
-            output_topic="avg_power_topic"
-    )
+            output_topic="avg_power_topic",
+            db_handler=db_handler,
+        )
+
     edge_server.run()
     while not edge_server.ready:
         time.sleep(.1)

@@ -16,7 +16,7 @@ variable "credentials_file" {
 }
 
 variable "project" {
-  description = "Your gcp project name."
+  description = "fog-computing"
   type        = string
 }
 

@@ -36,7 +36,7 @@ crash.log
 # Ignore .tfvars files that are not checked in
 # Uncomment the relevant line if you have sensitive .tfvars files
 # or you want to exclude all .tfvars files from version control.
-# *.tfvars
+*.tfvars
 # !example.tfvars
 
 # Ignore generated files
@@ -44,6 +44,8 @@ crash.log
 
 # Ignore local .env files used for environment variables
 .env*
+venv
+/edgeenv/
 
 # python
 .idea
