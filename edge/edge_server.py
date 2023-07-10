@@ -52,9 +52,9 @@ class EdgeServer:
         self.cloud_connected_condition = threading.Condition()
                 
         # destination config
-        self.gcloud_node_heartbeat = "tcp://34.107.25.174:63270"
-        self.gcloud_node_data = "tcp://34.107.25.174:63271"
-        self.gcloud_node_plz = "tcp://34.107.25.174:63272"
+        self.gcloud_node_heartbeat = "tcp://34.89.132.168:63270"
+        self.gcloud_node_data = "tcp://34.89.132.168:63271"
+        self.gcloud_node_plz = "tcp://34.89.132.168:63272"
         
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -142,7 +142,7 @@ class EdgeServer:
 
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
-        self.server_socket = pynng.Pub0()
+        self.server_socket = pynng.Req0()
         self.server_socket.dial(self.gcloud_node_data)
         while not self.shutdown:
             with self.cloud_connected_condition:
@@ -177,6 +177,8 @@ class EdgeServer:
                             logging.info(f"Queued Data buffered for sending to the server: {id}")
                             with self.db_lock:
                                 self.db_handler.update_sent_flag(id)
+                            response = self.server_socket.recv()
+                            self._handle_response_from_server(response)
                         except pynng.NNGException as e:
                             logging.error(f"Error occurred while sending data to the server: {e}")
                             break
@@ -202,51 +204,36 @@ class EdgeServer:
                                 logging.info(f"Queued Data buffered for sending to the server: {id}")
                                 with self.db_lock:
                                     self.db_handler.update_sent_flag(id)
+                                response = self.server_socket.recv()
+                                self._handle_response_from_server(response)
                             except pynng.NNGException as e:
                                 logging.error(f"Error occurred while sending data to the server: {e}")
                                 break
 
 
-
-
-    def _receive_from_server(self) -> None:
+    def _handle_response_from_server(self, message) -> None:
         """
-        Continuously receives data from the server.
+        Handle the response from the server.
+
+        Args:
+            message: The response message received from the server.
 
         Returns:
             None.
         """
-        while not self.shutdown:
-            if not self.cloud_connected:
-                time.sleep(1)
-                continue
-            try:
-                with pynng.Sub0() as socket:
-                    socket.listen(self.gcloud_node_plz)
-                    socket.subscribe(b'')
-                    while True:
-                        try:
-                            message = socket.recv()
-                            if message:
-                                try:
-                                    data = message.decode('utf-8')
-                                    match = re.match(r"PLZ for id: (\d+) - PLZ: (\d+)", data)
-                                    if match:
-                                        id, postal_code = map(int, match.groups())
-                                        print(f"Received Post Code from the server: {data}")
-                                        with self.db_lock:
-                                            self.db_handler.update_postal_code(id, postal_code)
-                                            self.db_handler.update_to_ack(id)
-                                    else:
-                                        print(f"Failed to parse message: {data}")
-                                except UnicodeDecodeError:
-                                    print("Failed to decode received message")
-                        except pynng.exceptions.TryAgain:
-                            continue
-            except pynng.NNGException as e:
-                print(f"Error occurred while receiving data from the server: {e}")
-            if self.shutdown:
-                break
+        try:
+            data = message.decode('utf-8')
+            match = re.match(r"PLZ for id: (\d+) - PLZ: (\d+)", data)
+            if match:
+                id, postal_code = map(int, match.groups())
+                print(f"Received Post Code from the server: {data}")
+                with self.db_lock:
+                    self.db_handler.update_postal_code(id, postal_code)
+                    self.db_handler.update_to_ack(id)
+            else:
+                print(f"Failed to parse message: {data}")
+        except UnicodeDecodeError:
+            print("Failed to decode received message")
 
 
     def run(self) -> None:
@@ -257,16 +244,13 @@ class EdgeServer:
             self.consumer_thread = Thread(target=self._consumer_thread)
             self.producer_thread = Thread(target=self._producer_thread)
             self.connection_check_thread = Thread(target=self._connection_thread)
-            self.data_send_thread = Thread(target=self._data_sender)
-            self.receive_plz = Thread(target=self._receive_from_server)
-            
+            self.data_send_thread = Thread(target=self._data_sender)            
             self.connection_check_thread.start()
             #time.sleep(3)
             self.consumer_thread.start()
             self.producer_thread.start()
             
             self.data_send_thread.start()
-            self.receive_plz.start()
             self.ready = True
         
         except Exception as e:
@@ -285,9 +269,6 @@ class EdgeServer:
                 self.connection_check_thread.join()
             if self.data_send_thread.is_alive():
                 self.data_send_thread.join()
-            if self.receive_plz.is_alive():
-                self.receive_plz.join()
-
             self.consumer.close()
             self.producer.close()
 
