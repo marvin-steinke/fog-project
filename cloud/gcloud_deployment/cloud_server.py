@@ -54,11 +54,10 @@ async def receive_heartbeat():
             except Exception as e:
                 logging.error(f"Error while receiving heartbeat: {e}")
 
-async def receive_data():
-    """Handles the receipt of data from an edge server."""
-    with pynng.Sub0() as data_socket:
+async def receive_and_respond_data():
+    """Handles the receipt of data from an edge server and responds with postal code."""
+    with pynng.Rep0() as data_socket:
         data_socket.listen('tcp://0.0.0.0:63271')
-        data_socket.subscribe(b'')
         while True:
             try:
                 request = await data_socket.arecv()
@@ -67,7 +66,12 @@ async def receive_data():
                 node_id = request_data.get('node_id', 'Unknown')
                 average = request_data.get('average', 'Unknown')
                 logging.info(f"Received data from edge server - id: {id}")
-                await plz_data(id)
+
+                plz = generate_plz(str(id))
+                postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
+                await data_socket.asend(postal_code)
+                logging.info(f"Sent PLZ for id: {id} - PLZ: {plz}")
+
                 cache_data(id, average)
             except pynng.exceptions.TryAgain:
                 await asyncio.sleep(1)
@@ -76,23 +80,6 @@ async def receive_data():
             except Exception as e:
                 logging.error(f"Error while receiving data: {e}")
 
-async def plz_data(id):
-    """Sends postal code back to the edge server.
-
-    Args:
-        id: The unique identifier for which the postal code is to be generated.
-    """
-    with pynng.Pub0() as ack_socket:
-        try:
-            ack_socket.dial('tcp://0.0.0.0:63272')
-            plz = generate_plz(str(id))
-            postal_code = f"PLZ for id: {id} - PLZ: {plz}".encode('utf-8')
-            await ack_socket.asend(postal_code)
-            logging.info(f"Sent PLZ for id: {id} - PLZ: {plz}")
-        except pynng.exceptions.TryAgain:
-            logging.error("Connection not available yet")
-        except Exception as e:
-            logging.error(f"Error while sending postal code back to edge: {e}")
 
 def generate_plz(id):
     """Generates a postal code based on the given id.
@@ -105,6 +92,7 @@ def generate_plz(id):
     """
     random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(4))
     return f'{id[:3]}{random_numbers}'
+
 
 
 def cache_data(id, node_average):
@@ -128,7 +116,7 @@ async def main():
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE)
 
-    receive_task = asyncio.create_task(receive_data())
+    receive_task = asyncio.create_task(receive_and_respond_data())
     heartbeat_task = asyncio.create_task(receive_heartbeat())
 
     await asyncio.gather(receive_task, heartbeat_task)
