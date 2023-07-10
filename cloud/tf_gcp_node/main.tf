@@ -3,8 +3,8 @@
 resource "google_compute_instance" "node" {
   name                    = "node"
   machine_type            = var.machine_type
-  tags                    = ["allow-ssh"]
-  # metadata_startup_script = "apt update && apt upgrade"
+  tags                    = ["open-ports"]
+  metadata_startup_script = file("startup_script.sh")
   metadata                = {
     ssh-keys = "${split("@", data.google_client_openid_userinfo.me.email)[0]}:${tls_private_key.ssh.public_key_openssh}"
   }
@@ -34,10 +34,10 @@ resource "google_compute_address" "external" {
   name = "node-external"
 }
 
-resource "google_compute_firewall" "allow_ssh" {
-  name          = "allow-ssh"
+resource "google_compute_firewall" "allow_ports" {
+  name          = "open-ports"
   network       = google_compute_network.vpc_network.name
-  target_tags   = ["allow-ssh"]
+  target_tags   = ["open-ports"]
   source_ranges = ["0.0.0.0/0"]
 
   allow {
