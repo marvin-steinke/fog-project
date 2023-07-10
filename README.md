@@ -17,25 +17,6 @@ start of the cloud server triggers a backend running on the same hosts that
 fetches key-value pairs out of the cache and visualizes them on charts,
 accessible on the web.
 
-## Project Structure
-
-```
-.
-├── cloud
-│   └── tf_gcp_node
-├── documents
-└── edge
-    ├── config.ini
-    ├── data
-    ├── docker-compose.yml
-    ├── edge_server.py
-    ├── main.py
-    └── simulator
-        ├── collector.py
-        ├── household.py
-        └── kafka_adapter.py
-```
-
 ## Edge Component:
 
 - `data`: Based on the original data from ["Gem House Opendata: German
