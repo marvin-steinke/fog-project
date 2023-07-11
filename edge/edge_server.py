@@ -55,11 +55,11 @@ class EdgeServer:
         config.read('config.ini')
         gcp_node_address = config.get("Server", "gcp_node")
 
-
         # destination config
         self.gcloud_node_heartbeat = f"tcp://{gcp_node_address}:63270"
-        self.gcloud_node_data = "tcp://{gcp_node_address}:63271"
-        self.gcloud_node_plz = "tcp://{gcp_node_address}:63272"
+        self.gcloud_node_data = f"tcp://{gcp_node_address}:63271"
+        # self.gcloud_node_heartbeat = "tcp://34.159.29.193:63270"
+        # self.gcloud_node_data = "tcp://34.159.29.193:63271"
 
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -242,7 +242,6 @@ class EdgeServer:
             #time.sleep(3)
             self.consumer_thread.start()
             self.producer_thread.start()
-
             self.data_send_thread.start()
             self.ready = True
 

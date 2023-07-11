@@ -34,7 +34,7 @@ This project simulates a distributed power system where power data from
 different households is streamed in real-time. The data is processed and
 averaged over a 5-second window. The simulation is coordinated by Mosaik, a
 co-simulation framework, and uses Apache Kafka for handling real-time data. The
-averaged data gets queued into an SQLite database and arranged into a schema
+averaged data gets queued into a SQLite database and arranged into a schema
 that allows for the tracking of each inserted tuple. The edge server manages the
 messaging of the queued data by continuously checking connectivity to the cloud
 server and buffering the generated tuples into the sockets. The cloud server
@@ -76,10 +76,22 @@ accessible on the web. A schema for the project is depicted in Figure
         check connectivity, publish data read from the Kafka topics and the
         SQLite database, and subscribe to messages from the cloud server. For
         messaging, we use Pynng, which is a Python wrapper of the lightweight,
-        high-performance messaging library. Initially, it does not provide
+        high-performance messaging library nano message. Initially, it does not provide
         \enquote{reliable} features such as message buffering or connection
         retries. It is considered to be based on ZeroMQ but aims to simplify its
-        usage.
+        usage. With concerns to reliability the edge server uses the database to
+        track if a message was sent or not. Initially the flag is set to 0. If sent it turn 1.
+        Only if the server received it and replied with the according postal code of the received ID
+        the message is considered acknowledged and the flag is set to 2 and eventually the postal code
+        is inserted into the db. Whenever the connection to the cloud node is established the `data_sender`
+        thread wakes up and both fetches both new data with sent flag 0 or data that might be lost with the
+        flag 1. This mechanism contributes to the robust disconnection handling. whenever the cloud-node 
+        crashes or the connection is dirupted the edge-server will buffer the queued messages to be sent.
+        When the edge-server crashes the cloud node logs accordingly and continues retrying to acknowledge 
+        heartbeats from the edge side. As soon as the edge-server is back online it benefits of the persistent
+        data-storage and continues sending data beginning from the last sent message ID. Again, in case the 
+        cloud-node sent the acknowledgement, but the edge-node crashed, as soon as it starts up again it will 
+        check the database and resent the unsent or unacknowledged messages to the cloud-node.
 
     \item \texttt{db\_operations.py}: The database contains operations for the
         lightweight, file-based SQLite database used by the \texttt{EdgeServer}.
@@ -102,16 +114,18 @@ publishes the generated postal codes to the edge server and triggers the
 This process provides a RESTful API for an AJAX engine running \texttt{main.js}
 in the frontend. The cloud server responds to continuous heartbeat messages to
 ensure necessary reliability and handle disconnections in the event of network
-failures or application crashes. The cloud server can be operated either
-directly or using Docker with the provided Dockerfile.
+failures or application crashes. The cloud server responds to continuous heartbeat
+messages to ensure necessary reliability and handle disconnections in the event of 
+network failures or application crashes. Both the cloud server and the web client can be operated by 
+the startup_script.sh integrated in the terraform files.
 
 \begin{itemize}
 
     \item \texttt{cloud\_server.py}: Contains asynchronous (implemented with
-        asyncio \& pynng) functions that reply to heartbeat messages by the
-        edge-server, subscribing to the power data and publishing the generated
-        postal codes back to the edge-server. The received data gets cached to
-        redis-server instance on the same host.
+        asyncio \& pynng) functions that reply to heartbeat messages by the edge-server, receive
+        the power data and reply with the generated postal codes back to the
+        edge-server. The received data gets cached to redis-server instance on the
+        same host.
 
     \item \texttt{data\_fetcher.py}: Contains the flask backend script to fetch
         data out of the redis-cache, associate one of sixteen german states with

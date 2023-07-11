@@ -43,13 +43,20 @@ accessible on the web.
 
 - `edge_server.py`: Contains the `EdgeServer` class for reading, writing, and
   inserting the produced data from the Kafka topics into SQLite. Additionally,
-  three concurrent threads are used to continuously check connectivity, publish
-  data read from the Kafka topics and the SQLite database, and subscribe to
+  two concurrent threads are used to continuously check connectivity, send
+  data read from the Kafka topics and the SQLite database, and receive
   messages from the cloud server. For messaging, we use Pynng, which is a
-  Python wrapper of the lightweight, high-performance messaging library.
+  Python wrapper of the lightweight, high-performance messaging library nano message.
   Initially, it does not provide "reliable" features such as message buffering
   or connection retries. It is considered to be based on ZeroMQ but aims to
-  simplify its usage.
+  simplify its usage. With concerns to reliability the edge server uses the database to
+  track if a message was sent or not. Initially the flag is set to 0. If sent it turn 1.
+  Only if the server received it and replied with the according postal code of the received ID
+  the message is considered acknowledged and the flag is set to 2 and eventually the postal code
+  is inserted into the db. Whenever the connection to the cloud node is established the `data_sender`
+  thread wakes up and both fetches both new data with sent flag 0 or data that might be lost with the
+  flag 1. This mechanism contributes to the robust disconnection handling. whenever the cloud-node 
+  crashes or the connection is dirupted the edge-server will buffer the queued messages to be sent. When the edge-server crashes the cloud node logs accordingly and continues retrying to acknowledge heartbeats from the edge side. As soon as the edge-server is back online it benefits of the persistent data-storage and continues sending data beginning from the last sent message ID. Again, in case the cloud-node sent the acknowledgement, but the edge-node crashed, as soon as it starts up again it will check the database and resent the unsent or unacknowledged messages to the cloud-node.
 
 - `db_operations`: The database contains operations for the lightweight,
   file-based SQLite database used by the `EdgeServer`. It creates a schema,
@@ -87,20 +94,19 @@ accessible on the web.
 ## Cloud Component
 
 The cloud node runs the `cloud_server.py` file to interact asynchronously with
-the edge component through three pynng sockets, utilizing both Pub/Sub and
-Req/Rep message patterns. The cloud node subscribes to the data from the Kafka
-server and caches the received data into a Redis cache. It also publishes the
-generated postal codes to the edge server and triggers the `data_fetcher.py`
-script in the backend to fetch data from the cache. This process provides a
-RESTful API for an AJAX engine running `main.js` in the frontend. The cloud
-server responds to continuous heartbeat messages to ensure necessary
-reliability and handle disconnections in the event of network failures or
-application crashes. The cloud server can be operated either directly or using
-Docker with the provided Dockerfile.
+the edge component through two pynng sockets, utilizing the Req/Rep message pattern. 
+The cloud node awaits data from the Kafka server and caches the received data into
+a Redis cache. For each received message it generates a postal code and sends it back 
+to the edge server and additionally triggers the `data_fetcher.py`script in the backend
+to fetch data from the cache. This process provides a RESTful API for an AJAX engine
+running `main.js` in the frontend. The cloud server responds to continuous heartbeat
+messages to ensure necessary reliability and handle disconnections in the event of 
+network failures or application crashes. Both the cloud server and the web client can be operated by 
+the `startup_script.sh` integrated in the terraform files.
 
 - `cloud_server.py`: Contains asynchronous (implemented with asyncio & pynng)
-  functions that reply to heartbeat messages by the edge-server, subscribing to
-  the power data and publishing the generated postal codes back to the
+  functions that reply to heartbeat messages by the edge-server, receive
+  the power data and reply with the generated postal codes back to the
   edge-server. The received data gets cached to redis-server instance on the
   same host.
 
