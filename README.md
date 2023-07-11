@@ -17,6 +17,10 @@ start of the cloud server triggers a backend running on the same hosts that
 fetches key-value pairs out of the cache and visualizes them on charts,
 accessible on the web.
 
+## Demo Video:
+
+- [Click to watch our Demo Video](./fog-proto_demo.mp4)
+
 ## Edge Component:
 
 - `data`: Based on the original data from ["Gem House Opendata: German
