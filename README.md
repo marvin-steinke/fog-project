@@ -68,6 +68,10 @@ accessible on the web.
   inserted and lost data by tracking and checking the `sent` flag. Furthermore,
   it handles the insertion of messages received from the cloud server.
 
+- `reliable messaging`: In terms of reliability, the edge server employs a database to track the status of messages.  
+  To ensure robust handling of disconnections, the `data_sender-thread`wakes up whenever the connection to the cloud node is established. The edge server retrieves two types of data: newly queued data with the flag set to 0, indicating it hasn't been sent yet, and data that may have been previously sent but not acknowledged, with the flag set to 1. It then buffers this data into the socket for further processing. This mechanism helps in managing potential disruptions and maintaining a reliable connection.
+  If the cloud node crashes or the connection is disrupted, the edge server buffers the queued messages to be sent. In the event of an edge server crash, the cloud node logs the occurrence and continues attempting to acknowledge heartbeats from the edge side. Once the edge server comes back online, it benefits from the persistent data storage and resumes sending data starting from the last sent message ID.
+  Additionally, if the cloud node successfully sends an acknowledgement but the edge node crashes, the edge node checks the database upon restarting and resends any unsent or unacknowledged messages to the cloud node. This ensures that no data is lost in case of an edge server failure.
 ## Usage
 
 1. Set up your Kafka and Zookeeper services. You can use Docker Compose with
@@ -102,7 +106,7 @@ the edge component through two pynng sockets, utilizing the Req/Rep message patt
 The cloud node awaits data from the Kafka server and caches the received data into
 a Redis cache. For each received message it generates a postal code and sends it back 
 to the edge server and additionally triggers the `data_fetcher.py`script in the backend
-to fetch data from the cache. This process provides a RESTful API for an AJAX engine
+to fetch data from the cache. This process provides a REST API for an ajax engine
 running `main.js` in the frontend. The cloud server responds to continuous heartbeat
 messages to ensure necessary reliability and handle disconnections in the event of 
 network failures or application crashes. Both the cloud server and the web client can be operated by 
