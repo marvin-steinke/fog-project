@@ -41,7 +41,7 @@ async def receive_heartbeat():
 
         while True:
             try:
-                message = await asyncio.wait_for(heartbeat_socket.arecv(), timeout=5)
+                message = await asyncio.wait_for(heartbeat_socket.arecv(), timeout=7)
                 if message == b'heartbeat':
                     last_heartbeat_time = time.time()
                     await heartbeat_socket.asend(b'ack')
