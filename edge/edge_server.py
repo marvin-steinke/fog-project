@@ -58,8 +58,6 @@ class EdgeServer:
         # destination config
         self.gcloud_node_heartbeat = f"tcp://{gcp_node_address}:63270"
         self.gcloud_node_data = f"tcp://{gcp_node_address}:63271"
-        # self.gcloud_node_heartbeat = "tcp://34.159.29.193:63270"
-        # self.gcloud_node_data = "tcp://34.159.29.193:63271"
 
         # sensor simulation
         self.consumer = KafkaConsumer(
@@ -99,12 +97,10 @@ class EdgeServer:
                 for node_id, values in self.data.items():
                     if values:
                         average = sum(values) / len(values)
-                        # print("Node ID:", node_id)
-                        # print("Average Power:", average)
-
                         with self.db_lock:
                             id = self.db_handler.insert_power_average(node_id, average)
                         print("Power Data queued:", id)
+                        
 
     def _connection_thread(self) -> None:
         """Thread that continually checks for connection."""
@@ -134,6 +130,7 @@ class EdgeServer:
                 self.cloud_connected = connection_alive
                 self.cloud_connected_condition.notify_all()
         heartbeat_socket.close()
+        
 
     def _data_sender(self):
         """Send the computed average values to the cloud server."""
@@ -239,7 +236,6 @@ class EdgeServer:
             self.connection_check_thread = Thread(target=self._connection_thread)
             self.data_send_thread = Thread(target=self._data_sender)
             self.connection_check_thread.start()
-            #time.sleep(3)
             self.consumer_thread.start()
             self.producer_thread.start()
             self.data_send_thread.start()
