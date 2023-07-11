@@ -83,7 +83,7 @@ accessible on the web. A schema for the project is depicted in Figure
         track if a message was sent or not. Initially the flag is set to 0. If sent it turn 1.
         Only if the server received it and replied with the according postal code of the received ID
         the message is considered acknowledged and the flag is set to 2 and eventually the postal code
-        is inserted into the db. Whenever the connection to the cloud node is established the `data_sender`
+        is inserted into the db. Whenever the connection to the cloud node is established the data_sender
         thread wakes up and both fetches both new data with sent flag 0 or data that might be lost with the
         flag 1. This mechanism contributes to the robust disconnection handling. whenever the cloud-node 
         crashes or the connection is dirupted the edge-server will buffer the queued messages to be sent.
