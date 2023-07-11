@@ -27,10 +27,10 @@ $(document).ready(function () {
           }
         },
         y: {
-      title: {
-        display: true,
-        text: 'Power Consumption (kw/h)'
-      },
+          title: {
+            display: true,
+            text: 'Power Consumption (kw/h)'
+          },
           beginAtZero: true,
           min: 0,
           max: 400000,
@@ -53,10 +53,11 @@ $(document).ready(function () {
           data.forEach(function (item) {
             var city = item.cityName;
             var cost = item.cost.toFixed(2);
-            var power = item.powerAverage.toFixed(2); // getting the powerAverage value
+
+            // Only show the city name and cost
             var costItem = document.createElement('div');
             costItem.classList.add('cost-item');
-            costItem.innerText = city + ': €' + cost + ', Power: ' + power + ' units';
+            costItem.innerText = city + ': €' + cost;
             costDisplay.appendChild(costItem);
           });
 
