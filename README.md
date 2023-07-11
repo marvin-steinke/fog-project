@@ -47,20 +47,13 @@ accessible on the web.
 
 - `edge_server.py`: Contains the `EdgeServer` class for reading, writing, and
   inserting the produced data from the Kafka topics into SQLite. Additionally,
-  two concurrent threads are used to continuously check connectivity, send
+  two concurrent threads are used to continuously check connectivity by expecting ACK's to sent heartbeats, send
   data read from the Kafka topics and the SQLite database, and receive
-  messages from the cloud server. For messaging, we use Pynng, which is a
+  messages from the cloud server. The thread to send data to the server is notified about the current connection status to the cloud node and thus either starts or stops data transmission while the kafka producer thread continously queues the generated real-time data into the database. For messaging, we use Pynng, which is a
   Python wrapper of the lightweight, high-performance messaging library nano message.
   Initially, it does not provide "reliable" features such as message buffering
   or connection retries. It is considered to be based on ZeroMQ but aims to
-  simplify its usage. With concerns to reliability the edge server uses the database to
-  track if a message was sent or not. Initially the flag is set to 0. If sent it turn 1.
-  Only if the server received it and replied with the according postal code of the received ID
-  the message is considered acknowledged and the flag is set to 2 and eventually the postal code
-  is inserted into the db. Whenever the connection to the cloud node is established the `data_sender`
-  thread wakes up and both fetches both new data with sent flag 0 or data that might be lost with the
-  flag 1. This mechanism contributes to the robust disconnection handling. whenever the cloud-node 
-  crashes or the connection is dirupted the edge-server will buffer the queued messages to be sent. When the edge-server crashes the cloud node logs accordingly and continues retrying to acknowledge heartbeats from the edge side. As soon as the edge-server is back online it benefits of the persistent data-storage and continues sending data beginning from the last sent message ID. Again, in case the cloud-node sent the acknowledgement, but the edge-node crashed, as soon as it starts up again it will check the database and resent the unsent or unacknowledged messages to the cloud-node.
+  simplify its usage. 
 
 - `db_operations`: The database contains operations for the lightweight,
   file-based SQLite database used by the `EdgeServer`. It creates a schema,
